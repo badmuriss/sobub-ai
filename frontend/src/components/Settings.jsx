@@ -1,0 +1,135 @@
+import { useState, useEffect } from 'react';
+import apiService from '../services/api';
+import MemeLibrary from './MemeLibrary';
+
+export default function Settings() {
+  const [settings, setSettings] = useState({
+    cooldown_seconds: 300,
+    trigger_probability: 30,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    try {
+      const data = await apiService.getSettings();
+      setSettings(data);
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+      setMessage({ type: 'error', text: 'Failed to load settings' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      await apiService.updateSettings({
+        cooldown_seconds: parseInt(settings.cooldown_seconds),
+        trigger_probability: parseFloat(settings.trigger_probability),
+      });
+      setMessage({ type: 'success', text: 'Settings saved successfully' });
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      setMessage({ type: 'error', text: 'Failed to save settings' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleChange = (field, value) => {
+    setSettings(prev => ({ ...prev, [field]: value }));
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-dark-muted">Loading...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-8">Settings</h1>
+
+      {/* Settings Form */}
+      <div className="bg-dark-surface border border-dark-border rounded-lg p-6 mb-8">
+        <h2 className="text-xl font-semibold mb-6">Configuration</h2>
+
+        {/* Cooldown */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium mb-2">
+            Cooldown Period (seconds)
+          </label>
+          <input
+            type="number"
+            value={settings.cooldown_seconds}
+            onChange={(e) => handleChange('cooldown_seconds', e.target.value)}
+            min="0"
+            max="3600"
+            className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-dark-text focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+          <p className="text-sm text-dark-muted mt-1">
+            Time between audio plays ({Math.floor(settings.cooldown_seconds / 60)} minutes)
+          </p>
+        </div>
+
+        {/* Trigger Probability */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium mb-2">
+            Trigger Probability (%)
+          </label>
+          <div className="flex items-center gap-4">
+            <input
+              type="range"
+              value={settings.trigger_probability}
+              onChange={(e) => handleChange('trigger_probability', e.target.value)}
+              min="0"
+              max="100"
+              step="5"
+              className="flex-1"
+            />
+            <span className="text-lg font-semibold w-16 text-right">
+              {settings.trigger_probability}%
+            </span>
+          </div>
+          <p className="text-sm text-dark-muted mt-1">
+            Chance of playing audio when context matches
+          </p>
+        </div>
+
+        {/* Save Button */}
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="w-full bg-green-600 hover:bg-green-700 disabled:bg-dark-border disabled:cursor-not-allowed rounded-lg py-3 font-semibold transition-colors"
+        >
+          {saving ? 'Saving...' : 'Save Settings'}
+        </button>
+
+        {/* Message */}
+        {message && (
+          <div className={`mt-4 p-3 rounded-lg ${
+            message.type === 'success' 
+              ? 'bg-green-900/20 border border-green-500 text-green-400' 
+              : 'bg-red-900/20 border border-red-500 text-red-400'
+          }`}>
+            {message.text}
+          </div>
+        )}
+      </div>
+
+      {/* Meme Library */}
+      <MemeLibrary />
+    </div>
+  );
+}
