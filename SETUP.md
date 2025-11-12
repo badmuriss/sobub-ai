@@ -35,7 +35,7 @@ Before you begin, ensure you have the following installed:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/sobub-ai.git
+   git clone https://github.com/badmuriss/sobub-ai.git
    cd sobub-ai
    ```
 
@@ -110,13 +110,17 @@ Before you begin, ensure you have the following installed:
 ## Troubleshooting
 
 ### GPU Not Detected
+**See [GPU_SETUP.md](./GPU_SETUP.md) for detailed GPU troubleshooting.**
+
+Quick fix:
 ```bash
 # Check if NVIDIA runtime is available
-docker run --rm --gpus all ubuntu nvidia-smi
+docker run --rm --gpus all nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi
 
-# If it fails, reinstall nvidia-container-toolkit
-sudo apt-get purge nvidia-container-toolkit
+# If it fails, install nvidia-container-toolkit (see GPU_SETUP.md)
+sudo apt-get update
 sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
 ```
 

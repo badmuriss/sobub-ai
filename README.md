@@ -26,13 +26,13 @@ A context-aware ambient audio companion that listens to conversations and occasi
 
 - Docker & Docker Compose
 - NVIDIA GPU with drivers installed
-- NVIDIA Container Toolkit
+- NVIDIA Container Toolkit ([see GPU_SETUP.md for installation](./GPU_SETUP.md))
 
 ## Quick Start
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/sobub-ai.git
+git clone https://github.com/badmuriss/sobub-ai.git
 cd sobub-ai
 ```
 
