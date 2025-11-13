@@ -26,10 +26,12 @@
 ### Core Concept
 
 The system operates as a "background companion" that:
-- Continuously listens to ambient conversation via microphone
-- Transcribes speech in near real-time using OpenAI's Whisper model
+- Continuously listens to ambient conversation via microphone (HTTPS required for mobile)
+- Transcribes speech in near real-time using faster-whisper (optimized Whisper implementation)
 - Analyzes transcriptions for contextual matches against user-defined tags
 - Randomly triggers playback of relevant audio memes based on probability and cooldown settings
+- Microphone pauses automatically during audio playback to prevent feedback
+- Cooldown starts AFTER audio finishes playing (not when triggered)
 - Runs 100% locally with GPU acceleration (no external API calls)
 
 ### Design Philosophy
@@ -50,26 +52,37 @@ The system operates as a "background companion" that:
 ┌─────────────────────────────────────────────────────────────┐
 │                         USER DEVICES                         │
 ├─────────────────────────────────────────────────────────────┤
-│  PC Browser (localhost:5173)  │  Mobile Browser (PC_IP:5173) │
+│   PC Browser (https://localhost)  │  Mobile (https://PC_IP)  │
 └─────────────────┬───────────────────────────┬───────────────┘
                   │                           │
                   ├───────────────────────────┘
-                  │
+                  │          HTTPS (443)
                   ▼
-         ┌────────────────────┐
-         │   React Frontend   │  (Port 5173)
-         │   - Vite + React   │
-         │   - TailwindCSS    │
-         │   - WebSocket      │
-         └────────┬───────────┘
+         ┌────────────────────────┐
+         │   Nginx Reverse Proxy  │  (Port 443/80)
+         │   - SSL termination    │
+         │   - Auto cert gen      │
+         │   - Request routing    │
+         └────────┬───────────────┘
                   │
           ┌───────┴────────┐
           │                │
-    REST API          WebSocket
-          │                │
           ▼                ▼
-    ┌─────────────────────────────┐
-    │    FastAPI Backend          │  (Port 8000)
+   ┌────────────────┐   ┌──────────────────────┐
+   │  Frontend      │   │  Backend             │
+   │  (Port 5173)   │   │  (Port 8000)         │
+   │  - Vite 7      │   │  - FastAPI           │
+   │  - React 18    │   │  - faster-whisper    │
+   │  - Node 20     │   │  - CUDA 12.3 + cuDNN │
+   └────────────────┘   └──────────┬───────────┘
+                                   │
+                    ┌──────────────┴──────────┐
+                    │                         │
+              REST API                    WebSocket
+                    │                         │
+                    ▼                         ▼
+    ┌─────────────────────────────────────────────┐
+    │         FastAPI Backend Services            │
     │  ┌─────────────────────┐    │
     │  │  WebSocket Handler  │    │
     │  │  - Audio streaming  │    │
@@ -115,15 +128,16 @@ The system operates as a "background companion" that:
 - Python 3.10
 - FastAPI (web framework)
 - Uvicorn (ASGI server)
-- OpenAI Whisper (speech recognition)
+- faster-whisper (optimized Whisper implementation for speech recognition)
 - PyTorch 2.1+ (ML framework)
-- CUDA 12.1 (GPU acceleration)
+- CUDA 12.3.2 + cuDNN 9 (GPU acceleration)
 - SQLite (database via aiosqlite)
 - WebSockets (real-time communication)
 
 **Frontend:**
 - React 18
-- Vite (build tool)
+- Vite 7 (build tool)
+- Node.js 20
 - TailwindCSS (styling)
 - React Router (navigation)
 - Native WebSocket API
@@ -132,6 +146,7 @@ The system operates as a "background companion" that:
 **Infrastructure:**
 - Docker + Docker Compose
 - NVIDIA Container Toolkit
+- Nginx reverse proxy (HTTPS with auto-generated self-signed certificates)
 - Bridge networking
 
 ---
@@ -232,30 +247,39 @@ Server → Client (JSON):
 
 #### 3. Whisper Service (`backend/app/whisper_service.py`)
 
-**Purpose**: Speech-to-text transcription using OpenAI's Whisper model.
+**Purpose**: Speech-to-text transcription using faster-whisper (optimized Whisper implementation).
 
 **Model Configuration:**
 - Default: Whisper "base" model (74M parameters)
-- Can be changed via `WHISPER_MODEL` env var
-- Options: tiny, base, small, medium, large
+- Configurable via Settings UI (tiny, base, small, medium, large)
 - Trade-off: smaller = faster but less accurate, larger = slower but more accurate
+- Multi-language support: en, pt, es, fr, de, and 90+ others
 
 **GPU Acceleration:**
 - Automatically detects CUDA availability
 - Falls back to CPU if GPU unavailable
-- Uses FP16 on GPU for 2x speed boost
+- Uses CTranslate2 for optimized inference (2-4x faster than openai-whisper)
+- Uses FP16 on GPU for additional 2x speed boost
 - Typical inference time: 0.5-2 seconds per 3-second chunk (base model on RTX 4070)
 
+**Audio Processing:**
+- Accepts WebM/Opus audio from browser MediaRecorder
+- Saves to temporary file for processing
+- ffmpeg (via faster-whisper) decodes WebM automatically
+- Skips chunks < 1KB (incomplete data)
+- Automatic cleanup of temporary files
+
 **Key Methods:**
-- `transcribe(audio_path: str) → str`: Main transcription function
-- Handles file loading and preprocessing automatically
+- `transcribe_audio(audio_data: bytes, language: str) → str`: Main transcription function
+- `transcribe_audio_file(audio_path: str) → str`: For file-based transcription
 - Returns cleaned text (lowercase, stripped)
 
 **Performance Notes:**
-- First transcription is slow (model loading)
+- First transcription is slow (model loading ~5-10s)
 - Subsequent transcriptions are fast (model cached in GPU memory)
 - Memory usage: ~1-2GB GPU RAM for base model
-- Model downloaded once to `/app/models/` (persisted via volume)
+- Model downloaded once to `/app/models/` (persisted via Docker volume)
+- faster-whisper is 2-4x faster than openai-whisper with same accuracy
 
 ---
 
@@ -311,29 +335,46 @@ Result: MATCH (contains "cooking" via "cook")
 **Logic Flow:**
 
 ```python
-def should_trigger(settings: Settings) → bool:
+def attempt_trigger(matching_memes: List[Dict]) → Optional[Dict]:
     # 1. Check cooldown
-    time_since_last = now - last_trigger_time
-    if time_since_last < settings.cooldown_minutes * 60:
-        return False  # Still in cooldown
+    if is_cooldown_active():
+        return None  # Still in cooldown
 
     # 2. Check probability
-    random_value = random.random()  # 0.0 to 1.0
-    if random_value < (settings.trigger_probability / 100):
-        return True  # Probability check passed
+    roll = random.uniform(0, 100)
+    if roll >= trigger_probability:
+        return None  # Probability check failed
 
-    return False  # Probability check failed
+    # 3. Select random meme
+    selected = random.choice(matching_memes)
+
+    # Note: Cooldown is NOT started here!
+    # It starts when audio finishes playing (via audio_ended control message)
+    return selected
 ```
 
 **Cooldown Mechanism:**
 - Tracks timestamp of last trigger
 - Prevents trigger spam
-- Configurable per session
-- Resets on settings update
+- Configurable per session (default: 180 seconds / 3 minutes)
+- **Critical**: Cooldown starts AFTER audio finishes playing, not when triggered
+- This ensures cooldown is based on when audio ends, not when it starts
+- Frontend sends `audio_ended` control message to start cooldown
+
+**Cooldown Timing Flow:**
+```
+1. Tag match found → attempt_trigger()
+2. Probability passes → meme selected
+3. Trigger message sent to client
+4. Client plays audio
+5. Audio finishes → client sends "audio_ended" message
+6. Backend receives "audio_ended" → start_cooldown()
+7. Cooldown timer starts NOW
+```
 
 **Probability System:**
 - User sets percentage (0-100)
-- 50% = 50% chance to trigger (if cooldown passed)
+- Default: 50% = 50% chance to trigger (if cooldown passed)
 - Adds randomness/unpredictability
 - Makes system feel more "organic"
 
@@ -345,15 +386,19 @@ def select_random_meme(matches: List[Meme]) → Meme:
 
 **Example Scenario:**
 ```
-Settings: cooldown=5min, probability=30%
-Last trigger: 6 minutes ago
+Settings: cooldown=180s (3min), probability=50%
+Last audio ended: 4 minutes ago
 Matches found: 3 memes
 
 Flow:
-1. 6min > 5min → cooldown passed ✓
-2. random.random() = 0.25 → 0.25 < 0.30 → probability passed ✓
+1. 4min > 3min → cooldown passed ✓
+2. random.uniform(0, 100) = 42 → 42 < 50 → probability passed ✓
 3. random.choice([meme1, meme2, meme3]) → meme2
-4. Trigger meme2 ✓
+4. Send trigger to client (cooldown NOT started yet)
+5. Client plays audio
+6. Audio finishes (10 seconds later)
+7. Client sends "audio_ended" message
+8. Backend starts cooldown NOW ✓
 ```
 
 ---
@@ -396,15 +441,21 @@ CREATE TABLE memes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     filename TEXT NOT NULL,
     tags TEXT NOT NULL,  -- Comma-separated string
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    play_count INTEGER DEFAULT 0  -- Track how many times played
 );
 
 CREATE TABLE settings (
-    id INTEGER PRIMARY KEY CHECK (id = 1),  -- Single row
-    cooldown_minutes INTEGER DEFAULT 5,
-    trigger_probability INTEGER DEFAULT 30,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
+
+-- Default settings (key-value pairs):
+-- cooldown_seconds: '180' (3 minutes)
+-- trigger_probability: '50' (50%)
+-- whisper_model: 'base'
+-- chunk_length_seconds: '3'
+-- language: 'pt' (Portuguese)
 ```
 
 **Tag Storage:**
@@ -431,10 +482,21 @@ class Meme(BaseModel):
     filename: str
     tags: List[str]
     created_at: str
+    play_count: int
 
-class Settings(BaseModel):
-    cooldown_minutes: int
-    trigger_probability: int  # 0-100
+class SettingsResponse(BaseModel):
+    cooldown_seconds: int
+    trigger_probability: float  # 0-100
+    whisper_model: str
+    chunk_length_seconds: int
+    language: str
+
+class SettingsUpdate(BaseModel):
+    cooldown_seconds: Optional[int] = None
+    trigger_probability: Optional[float] = None
+    chunk_length_seconds: Optional[int] = None
+    language: Optional[str] = None
+    whisper_model: Optional[str] = None
 ```
 
 **Benefits:**
@@ -442,6 +504,48 @@ class Settings(BaseModel):
 - Type safety
 - API documentation (OpenAPI/Swagger)
 - Serialization/deserialization
+
+---
+
+#### 9. Nginx Reverse Proxy (`nginx/`)
+
+**Purpose**: HTTPS reverse proxy with automatic SSL certificate generation.
+
+**Key Features:**
+- **SSL Termination**: Handles HTTPS encryption/decryption
+- **Auto Certificate Generation**: Self-signed certs generated on first startup
+- **Request Routing**: Routes requests to frontend/backend based on path
+- **HTTP → HTTPS Redirect**: All HTTP traffic redirected to HTTPS
+
+**Architecture:**
+```
+Browser (HTTPS) → Nginx (443) → Frontend (5173) / Backend (8000)
+                                ↓
+                         Self-signed SSL cert
+```
+
+**Request Routing:**
+- `/` → Frontend React app (port 5173)
+- `/api/*` → Backend FastAPI (port 8000)
+- `/ws/*` → Backend WebSocket (port 8000)
+- `/audio/*` → Backend audio files (port 8000)
+
+**Auto Certificate Generation:**
+- Entrypoint script checks for existing certificates
+- If missing, generates self-signed cert for localhost + local IP
+- Certificates stored in Docker volume (persists across rebuilds)
+- Valid for 365 days
+
+**Why HTTPS?**
+- Mobile browsers require secure context for microphone access
+- `navigator.mediaDevices.getUserMedia()` only works on HTTPS or localhost
+- Without HTTPS, mobile users cannot use the microphone
+
+**Configuration Files:**
+- `nginx/conf/nginx.conf` - Nginx configuration
+- `nginx/Dockerfile` - Container with auto-cert generation
+- `nginx/docker-entrypoint.sh` - Auto-generates certs on startup
+- `nginx/ssl/generate-certs.sh` - Manual cert generation script
 
 ---
 
@@ -472,59 +576,101 @@ class Settings(BaseModel):
 
 #### 2. Session Control (`frontend/src/components/SessionControl.jsx`)
 
-**Purpose**: Main control panel - start/stop sessions, view transcriptions.
+**Purpose**: Main control panel - start/stop sessions, view event log.
 
 **State Management:**
 ```javascript
-const [isConnected, setIsConnected] = useState(false);
-const [isRecording, setIsRecording] = useState(false);
-const [transcriptions, setTranscriptions] = useState([]);
-const [currentAudio, setCurrentAudio] = useState(null);
+const [isActive, setIsActive] = useState(false);
+const [isConnecting, setIsConnecting] = useState(false);
+const [error, setError] = useState(null);
+const [status, setStatus] = useState(null);
+const [events, setEvents] = useState([]);  // Event log with all activity
+const [showEventLog, setShowEventLog] = useState(true);  // Persisted to localStorage
 ```
+
+**Event Log System:**
+- Tracks all activity: transcriptions, matches, triggers, debug info, errors
+- Each event has: type, timestamp, and type-specific data
+- Limited to last 20 events (auto-truncates)
+- Toggle visibility with switch component (saved to localStorage)
+- Auto-scrolls to latest event
+
+**Event Types:**
+- `transcription`: Microphone captured and transcribed text
+- `match`: Tags matched in transcription
+- `trigger`: Meme audio triggered and playing
+- `debug`: System info (cooldown, probability checks)
+- `error`: Error messages
 
 **WebSocket Integration:**
 - Connects to backend on session start
-- Listens for transcriptions and triggers
-- Displays real-time transcriptions
+- Listens for: transcriptions, matches, triggers, debug, errors
+- Displays real-time event feed
 - Triggers audio playback
+- Sends `audio_ended` control message when audio finishes
 
 **User Flow:**
 1. Click "Start Session"
-2. Request microphone permission
+2. Request microphone permission (HTTPS required!)
 3. Connect to WebSocket
-4. Start recording (3-second chunks)
-5. Display transcriptions as they arrive
-6. Play audio when triggered
-7. Click "Stop Session" to end
+4. Start recording (configurable chunk length, default 3s)
+5. Display events as they arrive in real-time
+6. Toggle event log visibility with switch
+7. Click "Stop Session" to end (or navigate away - cleanup automatic)
 
 ---
 
 #### 3. Audio Player (`frontend/src/components/AudioPlayer.jsx`)
 
-**Purpose**: Global audio playback component.
+**Purpose**: Global audio playback component with microphone pause integration.
 
 **Features:**
 - Plays triggered meme audio
-- Shows currently playing audio name
-- Visual feedback (waveform animation)
-- Auto-hides when not playing
+- Notifies parent when playback starts/ends
+- Triggers microphone pause during playback (prevents feedback)
+- Sends `audio_ended` message to backend (starts cooldown)
 
 **Implementation:**
 ```jsx
-const audioRef = useRef(new Audio());
+const audioRef = useRef(null);
 
-const playAudio = (url, filename) => {
-  audioRef.current.src = url;
-  audioRef.current.play();
-  setIsPlaying(true);
-  setCurrentFile(filename);
+useEffect(() => {
+  if (triggerData) {
+    playAudio(triggerData.meme_id);
+  }
+}, [triggerData]);
+
+const handlePlay = () => {
+  // Notify parent that audio started (pauses microphone)
+  if (onPlayStart) onPlayStart();
 };
 
-// Cleanup on unmount
-useEffect(() => {
-  return () => audioRef.current.pause();
-}, []);
+const handleEnded = () => {
+  // Notify parent that audio ended (resumes microphone)
+  if (onPlayEnd) onPlayEnd();
+
+  // Also notify about completion
+  if (onPlayComplete) onPlayComplete();
+};
+
+// Event listeners on audio element
+<audio
+  ref={audioRef}
+  onPlay={handlePlay}
+  onEnded={handleEnded}
+  onPause={handlePause}
+  className="hidden"
+/>
 ```
+
+**Microphone Pause Flow:**
+1. Trigger received → Audio starts playing
+2. `onPlay` fires → Call `onPlayStart()` → Notify App.jsx
+3. App.jsx calls `websocketService.setAudioPlaying(true)`
+4. WebSocket service stops sending audio chunks
+5. Audio finishes → `onEnded` fires → Call `onPlayEnd()`
+6. App.jsx calls `websocketService.setAudioPlaying(false)` (resumes mic)
+7. App.jsx sends `audio_ended` control message → Backend starts cooldown
 
 ---
 
@@ -579,28 +725,31 @@ const handleUpload = async (file, tags) => {
 
 **Purpose**: REST API client for backend communication.
 
-**URL Auto-Detection:**
+**URL Detection with Nginx:**
 ```javascript
 const getApiUrl = () => {
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol;
     const hostname = window.location.hostname;
-    return `${protocol}//${hostname}:8000`;
+    // With nginx reverse proxy, API is at same origin
+    return `${protocol}//${hostname}`;
   }
-  return 'http://localhost:8000';
+  return 'http://localhost';
 };
 ```
 
-**How It Works:**
-- PC access: `http://localhost:5173` → API at `http://localhost:8000`
-- Mobile access: `http://192.168.1.100:5173` → API at `http://192.168.1.100:8000`
-- Zero configuration needed!
+**How It Works with Nginx:**
+- All requests go through nginx reverse proxy
+- Nginx routes `/api/*` to backend:8000
+- Frontend doesn't need to know backend port
+- Works seamlessly on both PC and mobile
+- Example: `https://localhost/api/memes` → nginx → `http://backend:8000/api/memes`
 
 ---
 
 #### 7. WebSocket Service (`frontend/src/services/websocket.js`)
 
-**Purpose**: WebSocket client for real-time communication.
+**Purpose**: WebSocket client for real-time communication and audio recording.
 
 **Connection Management:**
 ```javascript
@@ -614,7 +763,7 @@ connect() {
 }
 ```
 
-**Audio Recording:**
+**Audio Recording with Microphone Pause:**
 ```javascript
 const stream = await navigator.mediaDevices.getUserMedia({
   audio: {
@@ -622,6 +771,7 @@ const stream = await navigator.mediaDevices.getUserMedia({
     channelCount: 1,
     echoCancellation: true,
     noiseSuppression: true,
+    suppressLocalAudioPlayback: true,  // Prevent echo from speakers
   }
 });
 
@@ -629,21 +779,59 @@ const mediaRecorder = new MediaRecorder(stream, {
   mimeType: 'audio/webm;codecs=opus'
 });
 
-mediaRecorder.ondataavailable = (event) => {
-  // Send audio chunk to server
-  event.data.arrayBuffer().then(buffer => {
-    this.ws.send(buffer);
-  });
+// IMPORTANT: onstop must be async for proper sequencing
+mediaRecorder.onstop = async () => {
+  if (chunks.length > 0 && this.ws && this.ws.readyState === WebSocket.OPEN) {
+    const blob = new Blob(chunks, { type: 'audio/webm' });
+
+    // Check if audio is playing before sending
+    if (!this.isAudioPlaying) {
+      const buffer = await blob.arrayBuffer();
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(buffer);
+      }
+    } else {
+      console.log('Skipping chunk send - meme audio is playing');
+    }
+  }
+
+  // Start next recording cycle with small delay to prevent overlap
+  if (this.isRecording) {
+    setTimeout(() => this.startRecordingCycle(), 100);
+  }
 };
 
-mediaRecorder.start(3000); // 3-second chunks
+mediaRecorder.start(chunkLength * 1000); // Configurable chunk length
 ```
 
-**Why 3-second chunks?**
-- Balance between latency and context
-- Enough audio for accurate transcription
-- Fast enough to feel responsive
-- Matches Whisper's optimal input length
+**Microphone Pause Feature:**
+```javascript
+setAudioPlaying(isPlaying) {
+  this.isAudioPlaying = isPlaying;
+  console.log(`Audio playback state: ${isPlaying ? 'playing' : 'stopped'}`);
+}
+
+// Called from App.jsx when audio starts/ends
+// Prevents microphone from capturing meme audio playback
+```
+
+**Control Messages:**
+```javascript
+sendControlMessage(data) {
+  if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+    this.ws.send(JSON.stringify(data));
+  }
+}
+
+// Example: Notify backend that audio finished playing
+sendControlMessage({ type: 'audio_ended' });
+```
+
+**Why Configurable Chunk Length?**
+- Default 3 seconds: Balance between latency and context
+- Longer chunks (5-10s): More context but higher latency
+- Shorter chunks (1-2s): Lower latency but less context
+- User can adjust in Settings based on preference
 
 ---
 

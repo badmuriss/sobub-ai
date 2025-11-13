@@ -3,10 +3,7 @@ import apiService from '../services/api';
 import MemeLibrary from './MemeLibrary';
 
 export default function Settings() {
-  const [settings, setSettings] = useState({
-    cooldown_seconds: 300,
-    trigger_probability: 30,
-  });
+  const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
@@ -35,6 +32,9 @@ export default function Settings() {
       await apiService.updateSettings({
         cooldown_seconds: parseInt(settings.cooldown_seconds),
         trigger_probability: parseFloat(settings.trigger_probability),
+        chunk_length_seconds: parseInt(settings.chunk_length_seconds),
+        language: settings.language,
+        whisper_model: settings.whisper_model,
       });
       setMessage({ type: 'success', text: 'Settings saved successfully' });
     } catch (error) {
@@ -49,7 +49,7 @@ export default function Settings() {
     setSettings(prev => ({ ...prev, [field]: value }));
   };
 
-  if (loading) {
+  if (loading || !settings) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-dark-muted">Loading...</div>
@@ -80,6 +80,65 @@ export default function Settings() {
           />
           <p className="text-sm text-dark-muted mt-1">
             Time between audio plays ({Math.floor(settings.cooldown_seconds / 60)} minutes)
+          </p>
+        </div>
+
+        {/* Audio Chunk Length */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium mb-2">
+            Audio Chunk Length (seconds)
+          </label>
+          <input
+            type="number"
+            value={settings.chunk_length_seconds}
+            onChange={(e) => handleChange('chunk_length_seconds', e.target.value)}
+            min="1"
+            max="10"
+            step="0.5"
+            className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-dark-text focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+          <p className="text-sm text-dark-muted mt-1">
+            Duration of each audio recording chunk sent for transcription
+          </p>
+        </div>
+
+        {/* Language */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium mb-2">
+            Transcription Language
+          </label>
+          <select
+            value={settings.language}
+            onChange={(e) => handleChange('language', e.target.value)}
+            className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-dark-text focus:outline-none focus:ring-2 focus:ring-green-500"
+          >
+            <option value="en">English</option>
+            <option value="es">Español (Spanish)</option>
+            <option value="pt">Português (Portuguese)</option>
+          </select>
+          <p className="text-sm text-dark-muted mt-1">
+            Language for speech recognition
+          </p>
+        </div>
+
+        {/* Whisper Model */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium mb-2">
+            Whisper Model
+          </label>
+          <select
+            value={settings.whisper_model}
+            onChange={(e) => handleChange('whisper_model', e.target.value)}
+            className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-dark-text focus:outline-none focus:ring-2 focus:ring-green-500"
+          >
+            <option value="tiny">Tiny (fastest, least accurate)</option>
+            <option value="base">Base (balanced - recommended)</option>
+            <option value="small">Small (slower, more accurate)</option>
+            <option value="medium">Medium (very slow, very accurate)</option>
+            <option value="large">Large (slowest, most accurate)</option>
+          </select>
+          <p className="text-sm text-dark-muted mt-1">
+            Trade-off between speed and accuracy. Model will reload on next transcription.
           </p>
         </div>
 

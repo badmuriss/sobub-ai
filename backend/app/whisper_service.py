@@ -2,6 +2,8 @@ from faster_whisper import WhisperModel
 import torch
 import numpy as np
 import io
+import tempfile
+import os
 import logging
 from typing import Optional
 
@@ -37,31 +39,39 @@ class WhisperService:
             text_parts.append(segment.text)
         return "".join(text_parts).strip()
 
-    def transcribe_audio(self, audio_data: bytes) -> Optional[str]:
+    def transcribe_audio(self, audio_data: bytes, language: str = "en") -> Optional[str]:
         """
         Transcribe audio data to text.
 
         Args:
-            audio_data: Raw audio bytes (WAV format expected)
+            audio_data: Raw audio bytes (WebM/Opus format from browser)
 
         Returns:
             Transcribed text or None if transcription fails
         """
+        temp_file = None
+        temp_file_path = None
         try:
             if self.model is None:
                 self.load_model()
 
-            # Convert bytes to numpy array
-            # Assuming 16-bit PCM audio
-            audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+            # Skip very small chunks (likely incomplete)
+            if len(audio_data) < 1000:  # Less than 1KB
+                logger.debug(f"Skipping tiny audio chunk ({len(audio_data)} bytes)")
+                return None
 
-            # Whisper expects audio at 16kHz
-            # faster-whisper returns (segments, info) tuple
+            # Save audio data to temporary file
+            # WebM needs to be decoded by ffmpeg, which faster-whisper handles automatically
+            with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as temp_file:
+                temp_file.write(audio_data)
+                temp_file_path = temp_file.name
+
+            # Transcribe using file path (faster-whisper handles WebM decoding)
             segments, info = self.model.transcribe(
-                audio_np,
-                language="en",  # Can be made configurable
-                beam_size=5,     # Default faster-whisper beam size for better accuracy
-                vad_filter=True  # Voice Activity Detection to filter out silence
+                temp_file_path,
+                language=language,  # Configurable language (en, es, pt, etc.)
+                beam_size=5,        # Default faster-whisper beam size for better accuracy
+                vad_filter=True     # Voice Activity Detection to filter out silence
             )
 
             transcribed_text = self._segments_to_text(segments, info)
@@ -73,8 +83,19 @@ class WhisperService:
             return None
 
         except Exception as e:
-            logger.error(f"Transcription error: {e}")
+            # Don't spam logs with invalid WebM chunk errors (common with MediaRecorder)
+            if "Invalid data found" in str(e) or "1094995529" in str(e):
+                logger.debug(f"Skipping invalid audio chunk (incomplete WebM data)")
+            else:
+                logger.error(f"Transcription error: {e}")
             return None
+        finally:
+            # Clean up temporary file
+            if temp_file_path and os.path.exists(temp_file_path):
+                try:
+                    os.unlink(temp_file_path)
+                except Exception as e:
+                    logger.warning(f"Failed to delete temp file: {e}")
 
     def transcribe_audio_file(self, audio_path: str) -> Optional[str]:
         """

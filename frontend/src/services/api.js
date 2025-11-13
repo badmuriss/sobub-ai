@@ -1,13 +1,12 @@
 // Auto-detect API URL based on where the frontend is accessed from
-// This allows mobile devices to automatically connect to the PC backend
+// With nginx reverse proxy, API is served from the same origin
 const getApiUrl = () => {
   if (typeof window !== 'undefined') {
-    const protocol = window.location.protocol; // http: or https:
-    const hostname = window.location.hostname; // localhost or 192.168.x.x
-    return `${protocol}//${hostname}:8000`;
+    // Use same origin as frontend (nginx routes /api/ to backend)
+    return window.location.origin;
   }
   // Fallback for non-browser contexts (SSR, testing)
-  return 'http://localhost:8000';
+  return 'http://localhost';
 };
 
 const API_URL = getApiUrl();

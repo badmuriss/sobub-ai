@@ -74,10 +74,11 @@ class TriggerEngine:
     def attempt_trigger(self, matching_memes: List[Dict]) -> Optional[Dict]:
         """
         Attempt to trigger a meme based on cooldown and probability.
-        
+        Note: Cooldown is NOT started here - call start_cooldown() after audio finishes.
+
         Args:
             matching_memes: List of memes that match the current context
-            
+
         Returns:
             Selected meme if triggered, None otherwise
         """
@@ -85,25 +86,29 @@ class TriggerEngine:
         if not matching_memes:
             logger.debug("No matching memes")
             return None
-        
+
         # Check cooldown
         if self.is_cooldown_active():
             remaining = self.get_cooldown_remaining()
             logger.debug(f"Cooldown active: {remaining}s remaining")
             return None
-        
+
         # Check probability
         if not self.should_trigger():
             logger.debug("Probability check failed")
             return None
-        
-        # Select and trigger meme
+
+        # Select and trigger meme (cooldown will be started when audio ends)
         selected_meme = self.select_random_meme(matching_memes)
         if selected_meme:
-            self.last_trigger_time = time.time()
             logger.info(f"Triggered meme: {selected_meme['filename']} (ID: {selected_meme['id']})")
-        
+
         return selected_meme
+
+    def start_cooldown(self):
+        """Start the cooldown timer (call this when audio finishes playing)."""
+        self.last_trigger_time = time.time()
+        logger.info(f"Cooldown started ({self.cooldown_seconds}s)")
     
     def reset_cooldown(self):
         """Manually reset the cooldown (for testing or manual control)."""

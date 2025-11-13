@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react
 import SessionControl from './components/SessionControl';
 import Settings from './components/Settings';
 import AudioPlayer from './components/AudioPlayer';
+import websocketService from './services/websocket';
 
 function Navigation() {
   const location = useLocation();
@@ -56,6 +57,19 @@ function AppContent() {
     }, 3000);
   };
 
+  const handlePlayStart = () => {
+    // Pause microphone sending while audio plays
+    websocketService.setAudioPlaying(true);
+  };
+
+  const handlePlayEnd = () => {
+    // Resume microphone sending
+    websocketService.setAudioPlaying(false);
+
+    // Notify backend that audio ended (to start cooldown)
+    websocketService.sendControlMessage({ type: 'audio_ended' });
+  };
+
   const handlePlayComplete = () => {
     // Optional: Do something when audio finishes playing
   };
@@ -92,8 +106,10 @@ function AppContent() {
       </Routes>
 
       {/* Audio Player */}
-      <AudioPlayer 
-        triggerData={triggerData} 
+      <AudioPlayer
+        triggerData={triggerData}
+        onPlayStart={handlePlayStart}
+        onPlayEnd={handlePlayEnd}
         onPlayComplete={handlePlayComplete}
       />
     </div>

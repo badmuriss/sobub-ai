@@ -7,6 +7,7 @@ from app.whisper_service import whisper_service
 from app.context_analyzer import context_analyzer
 from app.trigger_engine import trigger_engine
 from app.meme_manager import meme_manager
+from app.database import get_setting
 
 logger = logging.getLogger(__name__)
 
@@ -81,51 +82,75 @@ async def handle_websocket(websocket: WebSocket, client_id: str):
 async def process_audio_chunk(client_id: str, audio_data: bytes):
     """
     Process an audio chunk: transcribe, analyze, and potentially trigger a meme.
-    
+
     Args:
         client_id: Client identifier
         audio_data: Raw audio bytes
     """
     try:
+        # Get language setting
+        language = await get_setting("language") or "en"
+
         # Transcribe audio
-        transcribed_text = whisper_service.transcribe_audio(audio_data)
-        
+        transcribed_text = whisper_service.transcribe_audio(audio_data, language=language)
+
         if not transcribed_text:
+            logger.debug("No transcription from audio chunk")
             return
-        
+
+        logger.info(f"Transcribed ({language}): {transcribed_text}")
+
         # Send transcription back to client
         await manager.send_message(client_id, {
             "type": "transcription",
             "text": transcribed_text
         })
-        
+
         # Get all memes to extract tags
         all_memes = await meme_manager.get_all()
-        
+
         if not all_memes:
-            logger.debug("No memes in database")
+            logger.warning("No memes in database")
+            await manager.send_message(client_id, {
+                "type": "debug",
+                "level": "warning",
+                "message": "No memes in database"
+            })
             return
-        
+
         # Extract all available tags
         all_tags = context_analyzer.get_unique_tags_from_memes(all_memes)
-        
+
         # Match tags from transcribed text
         matched_tags = context_analyzer.match_tags(transcribed_text, all_tags)
-        
+
         if not matched_tags:
-            logger.debug("No tags matched")
+            logger.debug(f"No tags matched for: {transcribed_text}")
+            await manager.send_message(client_id, {
+                "type": "debug",
+                "level": "info",
+                "message": f"No matching tags found"
+            })
             return
-        
+
+        # Send match notification
+        logger.info(f"Matched tags: {matched_tags}")
+        await manager.send_message(client_id, {
+            "type": "match",
+            "matched_tags": matched_tags,
+            "transcription": transcribed_text
+        })
+
         # Get memes that match the tags
         matching_memes = await meme_manager.get_by_tags(matched_tags)
-        
+
         # Attempt to trigger a meme
         triggered_meme = trigger_engine.attempt_trigger(matching_memes)
-        
+
         if triggered_meme:
             # Increment play count
             await meme_manager.increment_play_count(triggered_meme["id"])
-            
+
             # Send trigger event to client
             await manager.send_message(client_id, {
                 "type": "trigger",
@@ -133,37 +158,59 @@ async def process_audio_chunk(client_id: str, audio_data: bytes):
                 "filename": triggered_meme["filename"],
                 "matched_tags": matched_tags
             })
-            
-            logger.info(f"Triggered meme {triggered_meme['filename']} for client {client_id}")
+
+            logger.info(f"✓ Triggered meme {triggered_meme['filename']} for client {client_id}")
         else:
             # Send status update (for debugging)
             cooldown_remaining = trigger_engine.get_cooldown_remaining()
             if cooldown_remaining > 0:
                 logger.debug(f"Cooldown active: {cooldown_remaining}s remaining")
-    
+                await manager.send_message(client_id, {
+                    "type": "debug",
+                    "level": "cooldown",
+                    "message": f"Cooldown active: {cooldown_remaining}s remaining"
+                })
+            else:
+                logger.debug("Probability check failed")
+                await manager.send_message(client_id, {
+                    "type": "debug",
+                    "level": "probability",
+                    "message": "Probability check failed (unlucky roll)"
+                })
+
     except Exception as e:
         logger.error(f"Error processing audio chunk: {e}")
+        await manager.send_message(client_id, {
+            "type": "debug",
+            "level": "error",
+            "message": f"Error: {str(e)}"
+        })
 
 
 async def handle_control_message(client_id: str, data: dict):
     """
     Handle control messages from client.
-    
+
     Args:
         client_id: Client identifier
         data: Control message data
     """
     message_type = data.get("type")
-    
+
     if message_type == "ping":
         await manager.send_message(client_id, {"type": "pong"})
-    
+
     elif message_type == "get_status":
         status = trigger_engine.get_status()
         await manager.send_message(client_id, {
             "type": "status",
             "data": status
         })
-    
+
+    elif message_type == "audio_ended":
+        # Start cooldown when audio finishes playing
+        trigger_engine.start_cooldown()
+        logger.info(f"Audio ended for client {client_id}, cooldown started")
+
     else:
         logger.warning(f"Unknown control message type: {message_type}")

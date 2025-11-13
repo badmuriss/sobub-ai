@@ -42,3 +42,6 @@ backend/models/
 # Logs
 *.log
 logs/
+
+# SSL Certificates (self-signed, regenerate locally)
+nginx/ssl/*.pem

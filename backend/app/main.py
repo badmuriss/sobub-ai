@@ -215,7 +215,9 @@ async def get_settings():
     return {
         "cooldown_seconds": int(settings.get("cooldown_seconds", "300")),
         "trigger_probability": float(settings.get("trigger_probability", "30")),
-        "whisper_model": settings.get("whisper_model", "base")
+        "whisper_model": settings.get("whisper_model", "base"),
+        "chunk_length_seconds": int(settings.get("chunk_length_seconds", "3")),
+        "language": settings.get("language", "en")
     }
 
 
@@ -223,18 +225,31 @@ async def get_settings():
 async def update_settings(settings: SettingsUpdate):
     """
     Update settings.
-    
+
     Args:
         settings: Updated settings
     """
     if settings.cooldown_seconds is not None:
         await update_setting("cooldown_seconds", str(settings.cooldown_seconds))
         trigger_engine.set_cooldown(settings.cooldown_seconds)
-    
+
     if settings.trigger_probability is not None:
         await update_setting("trigger_probability", str(settings.trigger_probability))
         trigger_engine.set_probability(settings.trigger_probability)
-    
+
+    if settings.chunk_length_seconds is not None:
+        await update_setting("chunk_length_seconds", str(settings.chunk_length_seconds))
+
+    if settings.language is not None:
+        await update_setting("language", settings.language)
+
+    if settings.whisper_model is not None:
+        await update_setting("whisper_model", settings.whisper_model)
+        # Reload whisper model with new selection
+        whisper_service.model_name = settings.whisper_model
+        whisper_service.model = None  # Force reload on next transcription
+        logger.info(f"Whisper model changed to: {settings.whisper_model}")
+
     return {"message": "Settings updated successfully"}
 
 

@@ -36,10 +36,12 @@ async def init_database():
         
         # Insert default settings if not exists
         await db.execute("""
-            INSERT OR IGNORE INTO settings (key, value) VALUES 
-            ('cooldown_seconds', '300'),
-            ('trigger_probability', '30'),
-            ('whisper_model', 'base')
+            INSERT OR IGNORE INTO settings (key, value) VALUES
+            ('cooldown_seconds', '180'),
+            ('trigger_probability', '50'),
+            ('whisper_model', 'base'),
+            ('chunk_length_seconds', '3'),
+            ('language', 'pt')
         """)
         
         await db.commit()

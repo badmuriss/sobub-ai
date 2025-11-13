@@ -27,11 +27,16 @@ class SettingsResponse(BaseModel):
     cooldown_seconds: int
     trigger_probability: float
     whisper_model: str
+    chunk_length_seconds: int
+    language: str
 
 
 class SettingsUpdate(BaseModel):
     cooldown_seconds: Optional[int] = None
     trigger_probability: Optional[float] = None
+    chunk_length_seconds: Optional[int] = None
+    language: Optional[str] = None
+    whisper_model: Optional[str] = None
 
 
 class TranscriptionResponse(BaseModel):

@@ -1,21 +1,17 @@
-version: '3.8'
-
 services:
   backend:
     build: ./backend
     container_name: sobub-backend
     runtime: nvidia
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     volumes:
       - ./backend/data:/app/data
       - ./backend/models:/app/models
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      - WHISPER_MODEL=base
       - DATABASE_PATH=/app/data/memes.db
-      - AUDIO_PATH=/app/data/audio_files
     restart: unless-stopped
     networks:
       - sobub-network
@@ -23,11 +19,24 @@ services:
   frontend:
     build: ./frontend
     container_name: sobub-frontend
-    ports:
-      - "5173:5173"
-    # No environment variables needed - frontend auto-detects backend URL
-    # based on window.location.hostname (enables mobile connectivity)
+    expose:
+      - "5173"
     depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - sobub-network
+
+  nginx:
+    build: ./nginx
+    container_name: sobub-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - nginx-ssl:/etc/nginx/ssl
+    depends_on:
+      - frontend
       - backend
     restart: unless-stopped
     networks:
@@ -40,3 +49,4 @@ networks:
 volumes:
   backend-data:
   whisper-models:
+  nginx-ssl:
