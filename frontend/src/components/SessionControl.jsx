@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import websocketService from '../services/websocket';
 import apiService from '../services/api';
 
-export default function SessionControl({ onTrigger }) {
+export default function SessionControl({ onTrigger, onSessionStop }) {
   const [isActive, setIsActive] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState(null);
@@ -14,6 +14,13 @@ export default function SessionControl({ onTrigger }) {
     return saved !== null ? JSON.parse(saved) : true;
   });
   const eventsEndRef = useRef(null);
+  const wakeLockRef = useRef(null);
+  const onSessionStopRef = useRef(onSessionStop);
+
+  // Keep ref updated with latest callback
+  useEffect(() => {
+    onSessionStopRef.current = onSessionStop;
+  }, [onSessionStop]);
 
   const addEvent = (type, data) => {
     const event = {
@@ -33,6 +40,37 @@ export default function SessionControl({ onTrigger }) {
     const newValue = !showEventLog;
     setShowEventLog(newValue);
     localStorage.setItem('showEventLog', JSON.stringify(newValue));
+  };
+
+  // Screen Wake Lock functions
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        console.log('Screen wake lock acquired');
+
+        // Re-acquire wake lock if page becomes visible again
+        wakeLockRef.current.addEventListener('release', () => {
+          console.log('Screen wake lock released');
+        });
+      } else {
+        console.log('Wake Lock API not supported');
+      }
+    } catch (err) {
+      console.error('Failed to acquire wake lock:', err);
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    if (wakeLockRef.current) {
+      try {
+        await wakeLockRef.current.release();
+        wakeLockRef.current = null;
+        console.log('Screen wake lock manually released');
+      } catch (err) {
+        console.error('Failed to release wake lock:', err);
+      }
+    }
   };
 
   useEffect(() => {
@@ -70,14 +108,27 @@ export default function SessionControl({ onTrigger }) {
     });
 
     websocketService.on('error', (err) => {
-      setError('Connection error occurred');
+      setError('Connection error occurred - session stopped');
       console.error(err);
       addEvent('error', { message: err.message || 'Connection error' });
+
+      // Auto-stop session on connection error (safe to call even if not active)
+      websocketService.stopRecording();
+      websocketService.disconnect();
+      releaseWakeLock();
+      setIsActive(false);
+      setEvents([]);
+
+      // Stop audio and clear notification
+      if (onSessionStopRef.current) {
+        onSessionStopRef.current();
+      }
     });
 
     websocketService.on('connectionChange', (connected) => {
       if (!connected && isActive) {
         setIsActive(false);
+        releaseWakeLock();
       }
     });
 
@@ -89,9 +140,16 @@ export default function SessionControl({ onTrigger }) {
       // Stop recording and disconnect WebSocket
       websocketService.stopRecording();
       websocketService.disconnect();
+      releaseWakeLock();
+
+      // NOTE: We don't call onSessionStop here because:
+      // 1. It would stop playing audio when component re-renders
+      // 2. Audio should keep playing even if this component unmounts
+      // 3. onSessionStop should only be called on explicit user action or error
+
       console.log('SessionControl unmounted - session stopped');
     };
-  }, []);
+  }, []); // Empty deps - use refs for callbacks
 
   const loadStatus = async () => {
     try {
@@ -117,6 +175,9 @@ export default function SessionControl({ onTrigger }) {
       // Start recording with configured chunk length
       await websocketService.startRecording(chunkLength);
 
+      // Request screen wake lock to keep phone active
+      await requestWakeLock();
+
       setIsActive(true);
       setIsConnecting(false);
     } catch (err) {
@@ -133,9 +194,15 @@ export default function SessionControl({ onTrigger }) {
   const handleStop = () => {
     websocketService.stopRecording();
     websocketService.disconnect();
+    releaseWakeLock();
     setIsActive(false);
     setEvents([]);
     setError(null);
+
+    // Stop audio and clear notification
+    if (onSessionStopRef.current) {
+      onSessionStopRef.current();
+    }
   };
 
   const formatTime = (seconds) => {
@@ -281,6 +348,15 @@ export default function SessionControl({ onTrigger }) {
       >
         {isConnecting ? 'Starting...' : isActive ? 'Stop' : 'Start Session'}
       </button>
+
+      {/* Description */}
+      {!isActive && !isConnecting && (
+        <div className="mt-6 text-center max-w-md">
+          <p className="text-dark-muted text-sm">
+            <span className="italic">Silence Occasionally Broken Up By AI</span>
+          </p>
+        </div>
+      )}
 
       {/* Status Indicator */}
       {isActive && (

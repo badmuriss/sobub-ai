@@ -217,7 +217,8 @@ async def get_settings():
         "trigger_probability": float(settings.get("trigger_probability", "30")),
         "whisper_model": settings.get("whisper_model", "base"),
         "chunk_length_seconds": int(settings.get("chunk_length_seconds", "3")),
-        "language": settings.get("language", "en")
+        "language": settings.get("language", "en"),
+        "use_stemming": settings.get("use_stemming", "true")
     }
 
 
@@ -249,6 +250,10 @@ async def update_settings(settings: SettingsUpdate):
         whisper_service.model_name = settings.whisper_model
         whisper_service.model = None  # Force reload on next transcription
         logger.info(f"Whisper model changed to: {settings.whisper_model}")
+
+    if settings.use_stemming is not None:
+        await update_setting("use_stemming", settings.use_stemming)
+        logger.info(f"Use stemming set to: {settings.use_stemming}")
 
     return {"message": "Settings updated successfully"}
 

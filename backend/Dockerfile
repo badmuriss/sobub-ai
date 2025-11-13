@@ -21,6 +21,9 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip3 install --no-cache-dir -r requirements.txt
 
+# Download NLTK data for stemming and tokenization
+RUN python3 -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk.download('punkt_tab')"
+
 # Copy application code
 COPY ./app /app/app
 

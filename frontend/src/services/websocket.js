@@ -119,6 +119,9 @@ class WebSocketService {
   async startRecording(chunkLengthSeconds = 3) {
     if (this.isRecording) return;
 
+    // Reset audio playing flag when starting a new session
+    this.isAudioPlaying = false;
+
     try {
       // Check if getUserMedia is available (requires HTTPS or localhost)
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -242,6 +245,7 @@ class WebSocketService {
 
   stopRecording() {
     this.isRecording = false;
+    this.isAudioPlaying = false; // Reset flag when stopping
 
     if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
       this.mediaRecorder.stop();

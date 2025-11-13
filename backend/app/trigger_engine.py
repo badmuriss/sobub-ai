@@ -59,25 +59,69 @@ class TriggerEngine:
     def select_random_meme(self, matching_memes: List[Dict]) -> Optional[Dict]:
         """
         Select a random meme from the matching list.
-        
+
         Args:
             matching_memes: List of memes that match the context
-            
+
         Returns:
             Selected meme dict or None
         """
         if not matching_memes:
             return None
-        
+
         return random.choice(matching_memes)
-    
-    def attempt_trigger(self, matching_memes: List[Dict]) -> Optional[Dict]:
+
+    def select_meme_with_preference(self, matching_memes: List[Dict], match_scores: Dict[str, int]) -> Optional[Dict]:
+        """
+        Select meme with preference for longer matching tags.
+
+        Strategy:
+        1. Calculate score for each meme (max score of its matched tags)
+        2. Group memes by score
+        3. Select from highest-scoring group randomly
+
+        Args:
+            matching_memes: List of memes that match
+            match_scores: Dictionary mapping tags to their scores
+
+        Returns:
+            Selected meme dict or None
+        """
+        if not matching_memes:
+            return None
+
+        # Calculate score for each meme
+        meme_scores = []
+        for meme in matching_memes:
+            # Find highest scoring tag that matches this meme
+            max_score = 0
+            for tag in meme.get('tags', []):
+                if tag in match_scores:
+                    max_score = max(max_score, match_scores[tag])
+            meme_scores.append((meme, max_score))
+
+        # Get memes with highest score
+        if not meme_scores:
+            return self.select_random_meme(matching_memes)
+
+        max_score = max(score for _, score in meme_scores)
+        top_memes = [meme for meme, score in meme_scores if score == max_score]
+
+        # Log preference selection
+        if len(top_memes) < len(matching_memes):
+            logger.info(f"Preference selection: {len(top_memes)}/{len(matching_memes)} memes with score {max_score}")
+
+        # Random selection within top-scoring group
+        return random.choice(top_memes)
+
+    def attempt_trigger(self, matching_memes: List[Dict], match_scores: Dict[str, int] = None) -> Optional[Dict]:
         """
         Attempt to trigger a meme based on cooldown and probability.
         Note: Cooldown is NOT started here - call start_cooldown() after audio finishes.
 
         Args:
             matching_memes: List of memes that match the current context
+            match_scores: Optional dictionary of tag scores for preference-based selection
 
         Returns:
             Selected meme if triggered, None otherwise
@@ -99,7 +143,12 @@ class TriggerEngine:
             return None
 
         # Select and trigger meme (cooldown will be started when audio ends)
-        selected_meme = self.select_random_meme(matching_memes)
+        # Use preference-based selection if scores provided, otherwise random
+        if match_scores:
+            selected_meme = self.select_meme_with_preference(matching_memes, match_scores)
+        else:
+            selected_meme = self.select_random_meme(matching_memes)
+
         if selected_meme:
             logger.info(f"Triggered meme: {selected_meme['filename']} (ID: {selected_meme['id']})")
 

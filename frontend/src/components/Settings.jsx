@@ -35,6 +35,7 @@ export default function Settings() {
         chunk_length_seconds: parseInt(settings.chunk_length_seconds),
         language: settings.language,
         whisper_model: settings.whisper_model,
+        use_stemming: settings.use_stemming === 'true' || settings.use_stemming === true ? 'true' : 'false',
       });
       setMessage({ type: 'success', text: 'Settings saved successfully' });
     } catch (error) {
@@ -119,6 +120,32 @@ export default function Settings() {
           <p className="text-sm text-dark-muted mt-1">
             Language for speech recognition
           </p>
+        </div>
+
+        {/* Use Stemming */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <label className="block text-sm font-medium mb-1">
+                Word Stemming
+              </label>
+              <p className="text-sm text-dark-muted">
+                Match word variations (e.g., "running" matches "run", "played" matches "play")
+              </p>
+            </div>
+            <button
+              onClick={() => handleChange('use_stemming', settings.use_stemming === 'true' || settings.use_stemming === true ? 'false' : 'true')}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                settings.use_stemming === 'true' || settings.use_stemming === true ? 'bg-green-600' : 'bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  settings.use_stemming === 'true' || settings.use_stemming === true ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
         </div>
 
         {/* Whisper Model */}

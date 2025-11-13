@@ -1,21 +1,104 @@
 import { useState, useEffect } from 'react';
 import apiService from '../services/api';
 
+// TagInput Component with badge system (space-separated)
+function TagInput({ tags, onChange, placeholder }) {
+  const [currentInput, setCurrentInput] = useState('');
+
+  const handleKeyDown = (e) => {
+    if ((e.key === ',' || e.key === 'Enter') && currentInput.trim()) {
+      e.preventDefault();
+      const newTag = currentInput.trim();
+      if (!tags.includes(newTag)) {
+        onChange([...tags, newTag]);
+      }
+      setCurrentInput('');
+    } else if (e.key === 'Backspace' && !currentInput && tags.length > 0) {
+      // Delete last tag on backspace if input is empty
+      onChange(tags.slice(0, -1));
+    }
+  };
+
+  const handleChange = (e) => {
+    const value = e.target.value;
+    // If user types comma, create tag from what's before comma
+    if (value.includes(',')) {
+      const parts = value.split(',');
+      const newTag = parts[0].trim();
+      if (newTag && !tags.includes(newTag)) {
+        onChange([...tags, newTag]);
+      }
+      // Keep any text after comma as new input
+      setCurrentInput(parts.slice(1).join(','));
+    } else {
+      setCurrentInput(value);
+    }
+  };
+
+  const removeTag = (indexToRemove) => {
+    onChange(tags.filter((_, index) => index !== indexToRemove));
+  };
+
+  return (
+    <div className="space-y-2">
+      <input
+        type="text"
+        value={currentInput}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder || 'Type tag and press comma or enter...'}
+        className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-dark-text focus:outline-none focus:ring-2 focus:ring-green-500"
+      />
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {tags.map((tag, index) => (
+            <span
+              key={index}
+              className="inline-flex items-center gap-1 bg-green-900/30 text-green-400 px-3 py-1 rounded-full text-sm border border-green-500/30"
+            >
+              {tag}
+              <button
+                type="button"
+                onClick={() => removeTag(index)}
+                className="hover:text-green-300 transition-colors"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MemeLibrary() {
   const [memes, setMemes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [editTags, setEditTags] = useState('');
+  const [editTags, setEditTags] = useState([]);
   const [message, setMessage] = useState(null);
 
-  // Upload form state
-  const [uploadFile, setUploadFile] = useState(null);
-  const [uploadTags, setUploadTags] = useState('');
+  // Bulk upload staging state
+  const [stagingMode, setStagingMode] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
 
   useEffect(() => {
     loadMemes();
   }, []);
+
+  useEffect(() => {
+    // Cleanup blob URLs when component unmounts or staging mode exits
+    return () => {
+      pendingFiles.forEach(file => {
+        if (file.audioUrl) {
+          URL.revokeObjectURL(file.audioUrl);
+        }
+      });
+    };
+  }, [pendingFiles]);
 
   const loadMemes = async () => {
     try {
@@ -28,36 +111,113 @@ export default function MemeLibrary() {
     }
   };
 
-  const handleUpload = async (e) => {
-    e.preventDefault();
-    
-    if (!uploadFile || !uploadTags.trim()) {
-      setMessage({ type: 'error', text: 'Please select a file and add tags' });
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    const newPendingFiles = files.map((file, index) => ({
+      id: Date.now() + index,
+      file: file,
+      filename: file.name.replace('.mp3', ''),
+      tags: [],
+      audioUrl: URL.createObjectURL(file),
+    }));
+
+    setPendingFiles(newPendingFiles);
+    setStagingMode(true);
+    setMessage(null);
+
+    // Reset file input
+    e.target.value = '';
+  };
+
+  const updatePendingFile = (id, updates) => {
+    setPendingFiles(prev =>
+      prev.map(file => file.id === id ? { ...file, ...updates } : file)
+    );
+  };
+
+  const removePendingFile = (id) => {
+    const fileToRemove = pendingFiles.find(f => f.id === id);
+    if (fileToRemove && fileToRemove.audioUrl) {
+      URL.revokeObjectURL(fileToRemove.audioUrl);
+    }
+    setPendingFiles(prev => prev.filter(file => file.id !== id));
+
+    // Exit staging mode if no files left
+    if (pendingFiles.length === 1) {
+      cancelStaging();
+    }
+  };
+
+  const cancelStaging = () => {
+    // Cleanup blob URLs
+    pendingFiles.forEach(file => {
+      if (file.audioUrl) {
+        URL.revokeObjectURL(file.audioUrl);
+      }
+    });
+    setPendingFiles([]);
+    setStagingMode(false);
+    setMessage(null);
+  };
+
+  const confirmBulkUpload = async () => {
+    // Validate all files have at least one tag
+    const filesWithoutTags = pendingFiles.filter(f => f.tags.length === 0);
+    if (filesWithoutTags.length > 0) {
+      setMessage({
+        type: 'error',
+        text: `${filesWithoutTags.length} file(s) missing tags. Please add at least one tag to each file.`
+      });
       return;
     }
 
     setUploading(true);
-    setMessage(null);
+    setUploadProgress({ current: 0, total: pendingFiles.length });
+    const errors = [];
 
-    try {
-      const tags = uploadTags.split(',').map(t => t.trim()).filter(t => t);
-      await apiService.createMeme(uploadFile, tags);
-      
-      setMessage({ type: 'success', text: 'Audio uploaded successfully' });
-      setUploadFile(null);
-      setUploadTags('');
-      
-      // Reset file input
-      const fileInput = document.getElementById('file-upload');
-      if (fileInput) fileInput.value = '';
-      
-      await loadMemes();
-    } catch (error) {
-      console.error('Failed to upload meme:', error);
-      setMessage({ type: 'error', text: 'Failed to upload audio' });
-    } finally {
-      setUploading(false);
+    for (let i = 0; i < pendingFiles.length; i++) {
+      const pending = pendingFiles[i];
+      setUploadProgress({ current: i + 1, total: pendingFiles.length });
+
+      try {
+        // Rename file to user's chosen filename
+        const newFileName = `${pending.filename}.mp3`;
+        const renamedFile = new File([pending.file], newFileName, { type: pending.file.type });
+
+        await apiService.createMeme(renamedFile, pending.tags);
+      } catch (error) {
+        console.error(`Failed to upload ${pending.filename}:`, error);
+        errors.push(pending.filename);
+      }
     }
+
+    // Cleanup
+    pendingFiles.forEach(file => {
+      if (file.audioUrl) {
+        URL.revokeObjectURL(file.audioUrl);
+      }
+    });
+
+    setUploading(false);
+    setPendingFiles([]);
+    setStagingMode(false);
+
+    // Show result message
+    if (errors.length === 0) {
+      setMessage({
+        type: 'success',
+        text: `Successfully uploaded ${pendingFiles.length} audio file(s)`
+      });
+    } else {
+      setMessage({
+        type: 'error',
+        text: `Uploaded ${pendingFiles.length - errors.length} files. Failed: ${errors.join(', ')}`
+      });
+    }
+
+    await loadMemes();
   };
 
   const handleDelete = async (id) => {
@@ -75,18 +235,22 @@ export default function MemeLibrary() {
 
   const startEdit = (meme) => {
     setEditingId(meme.id);
-    setEditTags(meme.tags.join(', '));
+    setEditTags([...meme.tags]);
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    setEditTags('');
+    setEditTags([]);
   };
 
   const saveEdit = async (id) => {
+    if (editTags.length === 0) {
+      setMessage({ type: 'error', text: 'At least one tag is required' });
+      return;
+    }
+
     try {
-      const tags = editTags.split(',').map(t => t.trim()).filter(t => t);
-      await apiService.updateMeme(id, tags);
+      await apiService.updateMeme(id, editTags);
       setMessage({ type: 'success', text: 'Tags updated successfully' });
       setEditingId(null);
       await loadMemes();
@@ -106,48 +270,120 @@ export default function MemeLibrary() {
     <div className="bg-dark-surface border border-dark-border rounded-lg p-6">
       <h2 className="text-xl font-semibold mb-6">Audio Library</h2>
 
-      {/* Upload Form */}
-      <form onSubmit={handleUpload} className="mb-6 pb-6 border-b border-dark-border">
-        <div className="mb-4">
+      {/* Upload Section */}
+      {!stagingMode ? (
+        <div className="mb-6 pb-6 border-b border-dark-border">
           <label className="block text-sm font-medium mb-2">
-            Upload Audio (MP3)
+            Upload Audio Files (MP3)
           </label>
           <input
             id="file-upload"
             type="file"
             accept=".mp3,audio/mpeg"
-            onChange={(e) => setUploadFile(e.target.files[0])}
+            multiple
+            onChange={handleFileSelect}
             className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-dark-text file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-green-600 file:text-white hover:file:bg-green-700 file:cursor-pointer"
           />
+          <p className="text-xs text-dark-muted mt-2">
+            Select one or multiple MP3 files to upload
+          </p>
         </div>
+      ) : (
+        /* Staging UI */
+        <div className="mb-6 pb-6 border-b border-dark-border">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">
+              Review Files ({pendingFiles.length})
+            </h3>
+            {uploading && (
+              <span className="text-sm text-green-400">
+                Uploading {uploadProgress.current} of {uploadProgress.total}...
+              </span>
+            )}
+          </div>
 
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">
-            Tags (comma-separated)
-          </label>
-          <input
-            type="text"
-            value={uploadTags}
-            onChange={(e) => setUploadTags(e.target.value)}
-            placeholder="e.g. football, celebration, goal"
-            className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-dark-text focus:outline-none focus:ring-2 focus:ring-green-500"
-          />
+          <div className="space-y-4 mb-4 max-h-96 overflow-y-auto">
+            {pendingFiles.map((pending) => (
+              <div
+                key={pending.id}
+                className="bg-dark-bg border border-dark-border rounded-lg p-4"
+              >
+                {/* Audio Preview */}
+                <div className="mb-3">
+                  <audio
+                    controls
+                    src={pending.audioUrl}
+                    className="w-full h-10"
+                    style={{ maxHeight: '40px' }}
+                  />
+                </div>
+
+                {/* Filename Input */}
+                <div className="mb-3">
+                  <label className="block text-xs font-medium text-dark-muted mb-1">
+                    Filename
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={pending.filename}
+                      onChange={(e) => updatePendingFile(pending.id, { filename: e.target.value })}
+                      className="flex-1 bg-dark-surface border border-dark-border rounded-lg px-3 py-2 text-dark-text focus:outline-none focus:ring-2 focus:ring-green-500"
+                      placeholder="Enter filename"
+                    />
+                    <span className="text-dark-muted">.mp3</span>
+                  </div>
+                </div>
+
+                {/* Tags Input */}
+                <div className="mb-3">
+                  <label className="block text-xs font-medium text-dark-muted mb-1">
+                    Tags (press comma to add)
+                  </label>
+                  <TagInput
+                    tags={pending.tags}
+                    onChange={(newTags) => updatePendingFile(pending.id, { tags: newTags })}
+                    placeholder="e.g., you, I like you, great goal"
+                  />
+                </div>
+
+                {/* Delete Button */}
+                <button
+                  onClick={() => removePendingFile(pending.id)}
+                  disabled={uploading}
+                  className="w-full bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-lg py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Remove File
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3">
+            <button
+              onClick={confirmBulkUpload}
+              disabled={uploading || pendingFiles.length === 0}
+              className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-dark-border disabled:cursor-not-allowed rounded-lg py-3 font-semibold transition-colors"
+            >
+              {uploading ? `Uploading ${uploadProgress.current}/${uploadProgress.total}...` : `Confirm Import (${pendingFiles.length})`}
+            </button>
+            <button
+              onClick={cancelStaging}
+              disabled={uploading}
+              className="flex-1 bg-dark-border hover:bg-dark-border/70 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg py-3 font-semibold transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
-
-        <button
-          type="submit"
-          disabled={uploading || !uploadFile}
-          className="w-full bg-green-600 hover:bg-green-700 disabled:bg-dark-border disabled:cursor-not-allowed rounded-lg py-2 font-semibold transition-colors"
-        >
-          {uploading ? 'Uploading...' : 'Upload Audio'}
-        </button>
-      </form>
+      )}
 
       {/* Message */}
       {message && (
         <div className={`mb-4 p-3 rounded-lg ${
-          message.type === 'success' 
-            ? 'bg-green-900/20 border border-green-500 text-green-400' 
+          message.type === 'success'
+            ? 'bg-green-900/20 border border-green-500 text-green-400'
             : 'bg-red-900/20 border border-red-500 text-red-400'
         }`}>
           {message.text}
@@ -171,15 +407,18 @@ export default function MemeLibrary() {
                   <p className="font-medium text-dark-text mb-1 break-all">
                     {meme.filename}
                   </p>
-                  
+
                   {editingId === meme.id ? (
-                    <input
-                      type="text"
-                      value={editTags}
-                      onChange={(e) => setEditTags(e.target.value)}
-                      className="w-full bg-dark-surface border border-dark-border rounded px-2 py-1 text-sm"
-                      placeholder="Tags (comma-separated)"
-                    />
+                    <div>
+                      <label className="block text-xs font-medium text-dark-muted mb-1">
+                        Tags (press comma to add)
+                      </label>
+                      <TagInput
+                        tags={editTags}
+                        onChange={setEditTags}
+                        placeholder="Type tag and press comma..."
+                      />
+                    </div>
                   ) : (
                     <div className="flex flex-wrap gap-1">
                       {meme.tags.map((tag, idx) => (

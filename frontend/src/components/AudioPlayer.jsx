@@ -1,8 +1,23 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import apiService from '../services/api';
 
-export default function AudioPlayer({ triggerData, onPlayComplete, onPlayStart, onPlayEnd }) {
+const AudioPlayer = forwardRef(({ triggerData, onPlayComplete, onPlayStart, onPlayEnd }, ref) => {
   const audioRef = useRef(null);
+
+  // Expose stopAudio method to parent components
+  useImperativeHandle(ref, () => ({
+    stopAudio() {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = '';
+        // Notify that playback stopped
+        if (onPlayEnd) {
+          onPlayEnd();
+        }
+      }
+    }
+  }));
 
   useEffect(() => {
     if (triggerData && triggerData.meme_id) {
@@ -20,6 +35,10 @@ export default function AudioPlayer({ triggerData, onPlayComplete, onPlayStart, 
       }
     } catch (error) {
       console.error('Failed to play audio:', error);
+      // Reset audio playing state if playback fails
+      if (onPlayEnd) {
+        onPlayEnd();
+      }
     }
   };
 
@@ -48,13 +67,26 @@ export default function AudioPlayer({ triggerData, onPlayComplete, onPlayStart, 
     }
   };
 
+  const handleError = (e) => {
+    console.error('Audio element error:', e);
+    // Reset audio playing state on error
+    if (onPlayEnd) {
+      onPlayEnd();
+    }
+  };
+
   return (
     <audio
       ref={audioRef}
       onPlay={handlePlay}
       onEnded={handleEnded}
       onPause={handlePause}
+      onError={handleError}
       className="hidden"
     />
   );
-}
+});
+
+AudioPlayer.displayName = 'AudioPlayer';
+
+export default AudioPlayer;

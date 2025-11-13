@@ -41,7 +41,8 @@ async def init_database():
             ('trigger_probability', '50'),
             ('whisper_model', 'base'),
             ('chunk_length_seconds', '3'),
-            ('language', 'pt')
+            ('language', 'pt'),
+            ('use_stemming', 'true')
         """)
         
         await db.commit()

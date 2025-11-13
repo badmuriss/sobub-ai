@@ -271,7 +271,6 @@ Server → Client (JSON):
 
 **Key Methods:**
 - `transcribe_audio(audio_data: bytes, language: str) → str`: Main transcription function
-- `transcribe_audio_file(audio_path: str) → str`: For file-based transcription
 - Returns cleaned text (lowercase, stripped)
 
 **Performance Notes:**

@@ -29,6 +29,7 @@ class SettingsResponse(BaseModel):
     whisper_model: str
     chunk_length_seconds: int
     language: str
+    use_stemming: str
 
 
 class SettingsUpdate(BaseModel):
@@ -37,6 +38,7 @@ class SettingsUpdate(BaseModel):
     chunk_length_seconds: Optional[int] = None
     language: Optional[str] = None
     whisper_model: Optional[str] = None
+    use_stemming: Optional[str] = None
 
 
 class TranscriptionResponse(BaseModel):

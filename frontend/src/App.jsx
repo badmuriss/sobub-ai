@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import SessionControl from './components/SessionControl';
 import Settings from './components/Settings';
@@ -46,16 +46,26 @@ function Navigation() {
 function AppContent() {
   const [triggerData, setTriggerData] = useState(null);
   const [showNotification, setShowNotification] = useState(false);
+  const audioPlayerRef = useRef(null);
 
   const handleTrigger = (data) => {
     setTriggerData(data);
     setShowNotification(true);
-    
+
     // Hide notification after 3 seconds
     setTimeout(() => {
       setShowNotification(false);
     }, 3000);
   };
+
+  const handleSessionStop = useCallback(() => {
+    // Stop audio playback if playing
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.stopAudio();
+    }
+    // Clear notification
+    setShowNotification(false);
+  }, []); // Empty deps: audioPlayerRef is a ref (stable), setShowNotification is stable
 
   const handlePlayStart = () => {
     // Pause microphone sending while audio plays
@@ -101,12 +111,13 @@ function AppContent() {
 
       {/* Main Content */}
       <Routes>
-        <Route path="/" element={<SessionControl onTrigger={handleTrigger} />} />
+        <Route path="/" element={<SessionControl onTrigger={handleTrigger} onSessionStop={handleSessionStop} />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
 
       {/* Audio Player */}
       <AudioPlayer
+        ref={audioPlayerRef}
         triggerData={triggerData}
         onPlayStart={handlePlayStart}
         onPlayEnd={handlePlayEnd}

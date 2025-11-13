@@ -88,8 +88,10 @@ async def process_audio_chunk(client_id: str, audio_data: bytes):
         audio_data: Raw audio bytes
     """
     try:
-        # Get language setting
+        # Get settings
         language = await get_setting("language") or "en"
+        use_stemming_str = await get_setting("use_stemming") or "true"
+        use_stemming = use_stemming_str.lower() == "true"
 
         # Transcribe audio
         transcribed_text = whisper_service.transcribe_audio(audio_data, language=language)
@@ -121,8 +123,8 @@ async def process_audio_chunk(client_id: str, audio_data: bytes):
         # Extract all available tags
         all_tags = context_analyzer.get_unique_tags_from_memes(all_memes)
 
-        # Match tags from transcribed text
-        matched_tags = context_analyzer.match_tags(transcribed_text, all_tags)
+        # Match tags from transcribed text with optional stemming
+        matched_tags, match_scores = context_analyzer.match_tags(transcribed_text, all_tags, use_stemming=use_stemming)
 
         if not matched_tags:
             logger.debug(f"No tags matched for: {transcribed_text}")
@@ -144,8 +146,8 @@ async def process_audio_chunk(client_id: str, audio_data: bytes):
         # Get memes that match the tags
         matching_memes = await meme_manager.get_by_tags(matched_tags)
 
-        # Attempt to trigger a meme
-        triggered_meme = trigger_engine.attempt_trigger(matching_memes)
+        # Attempt to trigger a meme (pass scores for preference-based selection)
+        triggered_meme = trigger_engine.attempt_trigger(matching_memes, match_scores)
 
         if triggered_meme:
             # Increment play count

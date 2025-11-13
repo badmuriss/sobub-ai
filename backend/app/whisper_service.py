@@ -97,34 +97,6 @@ class WhisperService:
                 except Exception as e:
                     logger.warning(f"Failed to delete temp file: {e}")
 
-    def transcribe_audio_file(self, audio_path: str) -> Optional[str]:
-        """
-        Transcribe audio from file path.
-
-        Args:
-            audio_path: Path to audio file
-
-        Returns:
-            Transcribed text or None if transcription fails
-        """
-        try:
-            if self.model is None:
-                self.load_model()
-
-            # faster-whisper returns (segments, info) tuple
-            segments, info = self.model.transcribe(
-                audio_path,
-                language="en",
-                beam_size=5,
-                vad_filter=True
-            )
-
-            return self._segments_to_text(segments, info)
-
-        except Exception as e:
-            logger.error(f"File transcription error: {e}")
-            return None
-
-
+    
 # Global instance
 whisper_service = WhisperService(model_name="base")
