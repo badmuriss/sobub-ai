@@ -135,25 +135,21 @@ class ContextAnalyzer:
 
         matched_tags = []
 
-        # Direct keyword matching
-        for keyword in keywords:
-            if keyword in normalized_tags:
-                original_tag = normalized_tags[keyword]
-                if original_tag not in matched_tags:
-                    matched_tags.append(original_tag)
-
-        # Partial matching (tag contains keyword or keyword contains tag)
-        for keyword in keywords:
-            for normalized_tag, original_tag in normalized_tags.items():
-                if original_tag not in matched_tags:
-                    # Check if keyword is in tag or tag is in keyword
-                    if normalized_tag in keyword or keyword in normalized_tag:
-                        matched_tags.append(original_tag)
-
-        # Check for multi-word tag phrases in normalized text
+        # Match tags as complete phrases in the normalized text
+        # This ensures multi-word tags match only when the whole phrase appears
         for normalized_tag, original_tag in normalized_tags.items():
-            if original_tag not in matched_tags:
-                # Check if the entire normalized tag phrase appears in normalized text
+            # Check if the entire normalized tag phrase appears in normalized text
+            # Use word boundaries to ensure complete phrase matching
+            tag_words = normalized_tag.split()
+            text_words = normalized_text.split()
+
+            # Single-word tags: match if word appears in text
+            if len(tag_words) == 1:
+                if normalized_tag in text_words:
+                    matched_tags.append(original_tag)
+            # Multi-word tags: match only if complete phrase appears
+            else:
+                # Check if the tag phrase appears as a substring in the text
                 if normalized_tag in normalized_text:
                     matched_tags.append(original_tag)
 
@@ -161,7 +157,9 @@ class ContextAnalyzer:
         match_scores = self.score_matches(text, matched_tags)
 
         if matched_tags:
-            logger.info(f"Matched tags with scores: {match_scores} from text: '{text}' (normalized: '{normalized_text}')")
+            logger.info(f"Matched tags with scores: {match_scores} from text: '{text}' (normalized: '{normalized_text}', stemming: {use_stemming})")
+        else:
+            logger.debug(f"No matches found for text: '{text}' (normalized: '{normalized_text}', stemming: {use_stemming})")
 
         return matched_tags, match_scores
     

@@ -42,7 +42,7 @@ async def init_database():
             ('whisper_model', 'base'),
             ('chunk_length_seconds', '3'),
             ('language', 'pt'),
-            ('use_stemming', 'true')
+            ('use_stemming', 'false')
         """)
         
         await db.commit()
