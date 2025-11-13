@@ -4,6 +4,7 @@ services:
   backend:
     build: ./backend
     container_name: sobub-backend
+    runtime: nvidia
     ports:
       - "8000:8000"
     volumes:
@@ -11,16 +12,10 @@ services:
       - ./backend/models:/app/models
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - WHISPER_MODEL=base
       - DATABASE_PATH=/app/data/memes.db
       - AUDIO_PATH=/app/data/audio_files
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
     restart: unless-stopped
     networks:
       - sobub-network
