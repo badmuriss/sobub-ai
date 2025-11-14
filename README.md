@@ -1,8 +1,12 @@
-# Sobub AI
+# SOBUB AI
 
 **S**ilence **O**ccasionally **B**roken **U**p **B**y **AI**
 
 A context-aware ambient audio companion that listens to conversations and plays relevant meme audios based on detected topics and probability-based triggering.
+
+## Inspiration
+
+The inspiration for the app was the following YouTube video: [1 Hour of Silence Occasionally Broken up by a Metal Pipe Falling Sound Effect](https://www.youtube.com/watch?v=YmHZI03a_Yo)
 
 ## Features
 
@@ -63,7 +67,7 @@ SSL certificates are **auto-generated** on first startup - no manual steps neede
 
 1. Click **Start Session** on the home screen
 2. Allow microphone access
-3. Start talking - Sobub AI listens and occasionally triggers relevant memes
+3. Start talking - SOBUB AI listens and occasionally triggers relevant memes
 4. Use **Settings** to:
    - Adjust cooldown period (default: 3 minutes)
    - Set trigger probability (default: 50%)

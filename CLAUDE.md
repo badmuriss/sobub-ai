@@ -1,6 +1,6 @@
 # CLAUDE.md - Development Context & Architecture
 
-> This document provides comprehensive technical context for AI assistants (Claude) working on the Sobub AI codebase. It covers architecture, design decisions, component relationships, and development guidelines.
+> This document provides comprehensive technical context for AI assistants (Claude) working on the SOBUB AI codebase. It covers architecture, design decisions, component relationships, and development guidelines.
 
 ---
 
@@ -21,7 +21,7 @@
 
 ## Project Overview
 
-**Sobub AI** (Silence Occasionally Broken Up By AI) is a context-aware ambient audio companion that listens to conversations, analyzes context, and randomly plays relevant meme audio clips.
+**SOBUB AI** (Silence Occasionally Broken Up By AI) is a context-aware ambient audio companion that listens to conversations, analyzes context, and randomly plays relevant meme audio clips.
 
 ### Core Concept
 
@@ -1496,7 +1496,7 @@ docker-compose up --build
 
 ## Conclusion
 
-This document provides comprehensive context for AI assistants working on the Sobub AI codebase. Key takeaways:
+This document provides comprehensive context for AI assistants working on the SOBUB AI codebase. Key takeaways:
 
 1. **Architecture**: Clean separation between frontend (React) and backend (FastAPI)
 2. **Real-time**: WebSocket for low-latency audio streaming

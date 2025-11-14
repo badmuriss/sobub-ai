@@ -1,3 +1,11 @@
+<<<<<<< Updated upstream
+=======
+"""
+WebSocket handler for SOBUB AI.
+
+Handles real-time audio streaming, transcription, and meme triggering.
+"""
+>>>>>>> Stashed changes
 from fastapi import WebSocket, WebSocketDisconnect
 import json
 import logging

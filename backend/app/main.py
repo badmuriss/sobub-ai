@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
-    title="Sobub AI API",
+    title="SOBUB AI API",
     description="Silence Occasionally Broken Up By AI",
     version="1.0.0"
 )
@@ -47,8 +47,13 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     """Initialize application on startup."""
+<<<<<<< Updated upstream
     logger.info("Starting Sobub AI backend...")
     
+=======
+    logger.info("Starting SOBUB AI backend...")
+
+>>>>>>> Stashed changes
     # Initialize database
     await init_database()
     logger.info("Database initialized")
@@ -62,15 +67,20 @@ async def startup_event():
     trigger_engine.set_cooldown(int(settings.get("cooldown_seconds", "300")))
     trigger_engine.set_probability(float(settings.get("trigger_probability", "30")))
     logger.info("Trigger engine configured")
+<<<<<<< Updated upstream
     
     logger.info("Sobub AI backend started successfully")
+=======
+
+    logger.info("SOBUB AI backend started successfully")
+>>>>>>> Stashed changes
 
 
 @app.get("/")
 async def root():
     """Root endpoint."""
     return {
-        "app": "Sobub AI",
+        "app": "SOBUB AI",
         "description": "Silence Occasionally Broken Up By AI",
         "status": "running"
     }

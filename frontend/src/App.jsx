@@ -13,7 +13,7 @@ function Navigation() {
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
-            <h1 className="text-xl font-bold text-dark-text">Sobub AI</h1>
+            <h1 className="text-xl font-bold text-dark-text">SOBUB AI</h1>
           </div>
           <div className="flex gap-4">
             <Link
