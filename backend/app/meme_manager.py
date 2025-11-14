@@ -13,17 +13,18 @@ from app.database import (
     get_memes_by_tags,
     increment_play_count
 )
+from app.config import StorageConfig
 
 logger = logging.getLogger(__name__)
 
-AUDIO_PATH = os.getenv("AUDIO_PATH", "/app/data/audio_files")
+AUDIO_DIR = StorageConfig.AUDIO_DIR
 
 
 class MemeManager:
     """Manages meme audio files and database operations."""
     
     def __init__(self):
-        self.audio_path = Path(AUDIO_PATH)
+        self.audio_path = Path(AUDIO_DIR)
         self.audio_path.mkdir(parents=True, exist_ok=True)
     
     async def add_meme(self, file_content: bytes, filename: str, tags: List[str]) -> Dict:

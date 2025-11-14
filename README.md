@@ -220,6 +220,94 @@ npm install
 npm run dev  # Starts on http://localhost:5173
 ```
 
+### Running Tests
+
+The backend includes comprehensive unit and integration tests using pytest.
+
+#### Install Test Dependencies
+
+```bash
+cd backend
+source venv/bin/activate  # If not already activated
+pip install -r requirements-dev.txt
+```
+
+#### Run All Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with verbose output
+pytest -v
+
+# Run specific test file
+pytest tests/unit/test_context_analyzer.py
+
+# Run specific test class
+pytest tests/unit/test_trigger_engine.py::TestCooldownManagement
+
+# Run specific test
+pytest tests/unit/test_context_analyzer.py::TestMatchTags::test_match_single_word_tag
+```
+
+#### Run Tests by Marker
+
+```bash
+# Run only unit tests
+pytest -m unit
+
+# Run only integration tests
+pytest -m integration
+
+# Run tests that don't require GPU
+pytest -m "not gpu"
+```
+
+#### Test Coverage
+
+```bash
+# Run tests with coverage report
+pytest --cov=app --cov-report=html
+
+# View coverage report
+open htmlcov/index.html  # macOS
+xdg-open htmlcov/index.html  # Linux
+```
+
+#### Test Structure
+
+```
+backend/tests/
+├── conftest.py              # Shared fixtures
+├── unit/                    # Unit tests (isolated components)
+│   ├── test_context_analyzer.py
+│   ├── test_trigger_engine.py
+│   └── test_audio_pipeline.py
+└── integration/             # Integration tests
+    ├── test_database.py
+    ├── test_api_endpoints.py
+    └── test_websocket.py
+```
+
+**Test Coverage:**
+- ✅ **Unit Tests**: ContextAnalyzer, TriggerEngine, AudioProcessingPipeline
+- ✅ **Integration Tests**: Database operations, REST API endpoints, WebSocket connections
+- ✅ **Mock Tests**: WhisperService mocked to avoid GPU dependency in tests
+
+### API Documentation
+
+The FastAPI backend provides interactive API documentation:
+
+- **Swagger UI**: `http://localhost:8000/docs`
+- **ReDoc**: `http://localhost:8000/redoc`
+
+These interfaces allow you to:
+- View all API endpoints with detailed descriptions
+- Try out endpoints directly in the browser
+- See request/response schemas with examples
+- Understand error responses
+
 ### Rebuilding Containers
 
 ```bash
