@@ -1,19 +1,8 @@
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-=======
 """
 WebSocket handler for SOBUB AI.
 
 Handles real-time audio streaming, transcription, and meme triggering.
 """
->>>>>>> Stashed changes
-=======
-"""
-WebSocket handler for Sobub AI.
-
-Handles real-time audio streaming, transcription, and meme triggering.
-"""
->>>>>>> 8a38096837c66815ff3d73c6d5cda79c89c6b57a
 from fastapi import WebSocket, WebSocketDisconnect
 import json
 from typing import Dict

@@ -47,17 +47,8 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     """Initialize application on startup."""
-<<<<<<< Updated upstream
-    logger.info("Starting Sobub AI backend...")
-<<<<<<< HEAD
-    
-=======
     logger.info("Starting SOBUB AI backend...")
 
->>>>>>> Stashed changes
-=======
-
->>>>>>> 8a38096837c66815ff3d73c6d5cda79c89c6b57a
     # Initialize database
     await init_database()
     logger.info("Database initialized")
@@ -78,17 +69,8 @@ async def startup_event():
     container.trigger_engine.set_cooldown(int(settings.get("cooldown_seconds", "300")))
     container.trigger_engine.set_probability(float(settings.get("trigger_probability", "30")))
     logger.info("Trigger engine configured")
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-    
-=======
-
->>>>>>> 8a38096837c66815ff3d73c6d5cda79c89c6b57a
-    logger.info("Sobub AI backend started successfully")
-=======
 
     logger.info("SOBUB AI backend started successfully")
->>>>>>> Stashed changes
 
 
 @app.get(

@@ -1,9 +1,5 @@
 """
-<<<<<<< HEAD
 Dependency Injection Container for SOBUB AI.
-=======
-Dependency Injection Container for Sobub AI.
->>>>>>> 8a38096837c66815ff3d73c6d5cda79c89c6b57a
 
 This module implements a simple dependency injection container to manage
 service instances and their dependencies. This replaces the global singleton

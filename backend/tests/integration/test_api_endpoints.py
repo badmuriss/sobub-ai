@@ -39,11 +39,7 @@ class TestRootEndpoints:
 
         assert response.status_code == 200
         data = response.json()
-<<<<<<< HEAD
         assert data["app"] == "SOBUB AI"
-=======
-        assert data["app"] == "Sobub AI"
->>>>>>> 8a38096837c66815ff3d73c6d5cda79c89c6b57a
         assert data["status"] == "running"
 
     @pytest.mark.asyncio
