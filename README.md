@@ -87,6 +87,21 @@ SSL certificates are **auto-generated** on first startup - no manual steps neede
 7. Cooldown starts AFTER audio finishes playing
 ```
 
+## Finding Audio Memes
+
+Looking for audio files to upload to your SOBUB AI library? Check out:
+
+**🎵 [MyInstants](https://www.myinstants.com/)**
+- Huge collection of meme sound effects and audio clips
+- Easy download - just click the button and save the MP3
+- Community-uploaded content with thousands of options
+- Perfect for finding trending memes and classic sound effects
+
+**Tips:**
+- Search for keywords related to your conversations (e.g., "football", "coding", "fail")
+- Download multiple variations of popular memes
+- Tag your audio files appropriately for better matching
+
 ## Configuration
 
 All settings are configurable via the web interface:
