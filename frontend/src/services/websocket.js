@@ -263,6 +263,7 @@ class WebSocketService {
   }
 
   setAudioPlaying(isPlaying) {
+    console.log(`[DEBUG] setAudioPlaying called: ${this.isAudioPlaying} → ${isPlaying}`);
     this.isAudioPlaying = isPlaying;
     console.log(`Audio playback state: ${isPlaying ? 'playing' : 'stopped'} - mic sending ${isPlaying ? 'paused' : 'active'}`);
   }

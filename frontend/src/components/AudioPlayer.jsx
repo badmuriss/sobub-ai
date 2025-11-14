@@ -61,10 +61,8 @@ const AudioPlayer = forwardRef(({ triggerData, onPlayComplete, onPlayStart, onPl
   };
 
   const handlePause = () => {
-    // If audio is paused/stopped, also notify
-    if (audioRef.current && audioRef.current.ended && onPlayEnd) {
-      onPlayEnd();
-    }
+    // Don't do anything on pause - onEnded handles when audio finishes
+    // This prevents duplicate onPlayEnd() calls
   };
 
   const handleError = (e) => {
