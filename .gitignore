@@ -45,3 +45,5 @@ logs/
 
 # SSL Certificates (self-signed, regenerate locally)
 nginx/ssl/*.pem
+
+.claude
