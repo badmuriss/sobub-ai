@@ -6,7 +6,7 @@ A context-aware ambient audio companion that listens to conversations and plays 
 
 ## Inspiration
 
-The inspiration for the app was the following YouTube video: [1 Hour of Silence Occasionally Broken up by a Metal Pipe Falling Sound Effect](https://www.youtube.com/watch?v=YmHZI03a_Yo)
+The inspiration for the app was the following YouTube video: [1 hour of silence occasionally broken up by random meme sound effects](https://www.youtube.com/watch?v=u4DXqKV0Wtk)
 
 ## Features
 
