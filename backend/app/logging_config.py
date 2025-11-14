@@ -1,5 +1,9 @@
 """
+<<<<<<< HEAD
 Centralized logging configuration for SOBUB AI.
+=======
+Centralized logging configuration for Sobub AI.
+>>>>>>> 8a38096837c66815ff3d73c6d5cda79c89c6b57a
 
 This module provides unified logging setup and utilities for consistent
 logging across all application components.

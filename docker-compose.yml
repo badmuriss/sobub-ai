@@ -12,6 +12,12 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - DATABASE_PATH=/app/data/memes.db
+      - AUDIO_DIR=/app/data/audio_files
+      - MODELS_DIR=/app/models
+      - DATA_DIR=/app/data
+      - LOGS_DIR=/app/data/logs
+      - LOG_FILE=/app/data/logs/sobub.log
+      - ENABLE_FILE_LOGGING=true
     restart: unless-stopped
     networks:
       - sobub-network

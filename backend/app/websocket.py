@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <<<<<<< Updated upstream
 =======
 """
@@ -6,49 +7,108 @@ WebSocket handler for SOBUB AI.
 Handles real-time audio streaming, transcription, and meme triggering.
 """
 >>>>>>> Stashed changes
+=======
+"""
+WebSocket handler for Sobub AI.
+
+Handles real-time audio streaming, transcription, and meme triggering.
+"""
+>>>>>>> 8a38096837c66815ff3d73c6d5cda79c89c6b57a
 from fastapi import WebSocket, WebSocketDisconnect
 import json
-import logging
 from typing import Dict
 
-from app.whisper_service import whisper_service
-from app.context_analyzer import context_analyzer
-from app.trigger_engine import trigger_engine
-from app.meme_manager import meme_manager
-from app.database import get_setting
+from .audio_pipeline import AudioProcessingPipeline, PipelineMessageBuilder
+from .container import get_container
+from .config import MessageType
+from .logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ConnectionManager:
-    """Manages WebSocket connections."""
-    
+    """Manages WebSocket connections and audio processing pipeline."""
+
     def __init__(self):
+        """Initialize connection manager."""
         self.active_connections: Dict[str, WebSocket] = {}
-    
-    async def connect(self, client_id: str, websocket: WebSocket):
-        """Accept and store a new WebSocket connection."""
+        self._pipeline: AudioProcessingPipeline = None
+
+    @property
+    def pipeline(self) -> AudioProcessingPipeline:
+        """
+        Get or create the audio processing pipeline.
+
+        Returns:
+            AudioProcessingPipeline instance
+        """
+        if self._pipeline is None:
+            container = get_container()
+            self._pipeline = AudioProcessingPipeline(
+                whisper_service=container.whisper_service,
+                context_analyzer=container.context_analyzer,
+                trigger_engine=container.trigger_engine,
+                meme_manager=container.meme_manager,
+            )
+        return self._pipeline
+
+    async def connect(self, client_id: str, websocket: WebSocket) -> None:
+        """
+        Accept and store a new WebSocket connection.
+
+        Args:
+            client_id: Unique client identifier
+            websocket: WebSocket connection
+        """
         await websocket.accept()
         self.active_connections[client_id] = websocket
         logger.info(f"Client {client_id} connected")
-    
-    def disconnect(self, client_id: str):
-        """Remove a WebSocket connection."""
+
+    def disconnect(self, client_id: str) -> None:
+        """
+        Remove a WebSocket connection.
+
+        Args:
+            client_id: Client identifier to disconnect
+        """
         if client_id in self.active_connections:
             del self.active_connections[client_id]
             logger.info(f"Client {client_id} disconnected")
-    
-    async def send_message(self, client_id: str, message: dict):
-        """Send a message to a specific client."""
+
+    async def send_message(self, client_id: str, message: dict) -> None:
+        """
+        Send a message to a specific client.
+
+        Args:
+            client_id: Target client identifier
+            message: Message dictionary to send
+        """
         if client_id in self.active_connections:
             await self.active_connections[client_id].send_json(message)
-    
-    async def broadcast(self, message: dict):
-        """Send a message to all connected clients."""
+
+    async def send_messages(self, client_id: str, messages: list) -> None:
+        """
+        Send multiple messages to a client.
+
+        Args:
+            client_id: Target client identifier
+            messages: List of message dictionaries to send
+        """
+        for message in messages:
+            await self.send_message(client_id, message)
+
+    async def broadcast(self, message: dict) -> None:
+        """
+        Send a message to all connected clients.
+
+        Args:
+            message: Message dictionary to broadcast
+        """
         for connection in self.active_connections.values():
             await connection.send_json(message)
 
 
+# Global connection manager instance
 manager = ConnectionManager()
 
 
@@ -87,117 +147,27 @@ async def handle_websocket(websocket: WebSocket, client_id: str):
         manager.disconnect(client_id)
 
 
-async def process_audio_chunk(client_id: str, audio_data: bytes):
+async def process_audio_chunk(client_id: str, audio_data: bytes) -> None:
     """
-    Process an audio chunk: transcribe, analyze, and potentially trigger a meme.
+    Process an audio chunk through the pipeline and send results to client.
+
+    This function is now much simpler, delegating the complex processing
+    logic to AudioProcessingPipeline and using PipelineMessageBuilder
+    for message creation.
 
     Args:
         client_id: Client identifier
         audio_data: Raw audio bytes
     """
-    try:
-        # Get settings
-        language = await get_setting("language") or "en"
-        use_stemming_str = await get_setting("use_stemming") or "true"
-        use_stemming = use_stemming_str.lower() == "true"
+    # Process through pipeline
+    result = await manager.pipeline.process(audio_data)
 
-        # Transcribe audio
-        transcribed_text = whisper_service.transcribe_audio(audio_data, language=language)
-
-        if not transcribed_text:
-            logger.debug("No transcription from audio chunk")
-            return
-
-        logger.info(f"Transcribed ({language}): {transcribed_text}")
-
-        # Send transcription back to client
-        await manager.send_message(client_id, {
-            "type": "transcription",
-            "text": transcribed_text
-        })
-
-        # Get all memes to extract tags
-        all_memes = await meme_manager.get_all()
-
-        if not all_memes:
-            logger.warning("No memes in database")
-            await manager.send_message(client_id, {
-                "type": "debug",
-                "level": "warning",
-                "message": "No memes in database"
-            })
-            return
-
-        # Extract all available tags
-        all_tags = context_analyzer.get_unique_tags_from_memes(all_memes)
-
-        # Match tags from transcribed text with optional stemming
-        matched_tags, match_scores = context_analyzer.match_tags(transcribed_text, all_tags, use_stemming=use_stemming)
-
-        if not matched_tags:
-            logger.debug(f"No tags matched for: {transcribed_text}")
-            await manager.send_message(client_id, {
-                "type": "debug",
-                "level": "info",
-                "message": f"No matching tags found"
-            })
-            return
-
-        # Send match notification
-        logger.info(f"Matched tags: {matched_tags}")
-        await manager.send_message(client_id, {
-            "type": "match",
-            "matched_tags": matched_tags,
-            "transcription": transcribed_text
-        })
-
-        # Get memes that match the tags
-        matching_memes = await meme_manager.get_by_tags(matched_tags)
-
-        # Attempt to trigger a meme (pass scores for preference-based selection)
-        triggered_meme = trigger_engine.attempt_trigger(matching_memes, match_scores)
-
-        if triggered_meme:
-            # Increment play count
-            await meme_manager.increment_play_count(triggered_meme["id"])
-
-            # Send trigger event to client
-            await manager.send_message(client_id, {
-                "type": "trigger",
-                "meme_id": triggered_meme["id"],
-                "filename": triggered_meme["filename"],
-                "matched_tags": matched_tags
-            })
-
-            logger.info(f"✓ Triggered meme {triggered_meme['filename']} for client {client_id}")
-        else:
-            # Send status update (for debugging)
-            cooldown_remaining = trigger_engine.get_cooldown_remaining()
-            if cooldown_remaining > 0:
-                logger.debug(f"Cooldown active: {cooldown_remaining}s remaining")
-                await manager.send_message(client_id, {
-                    "type": "debug",
-                    "level": "cooldown",
-                    "message": f"Cooldown active: {cooldown_remaining}s remaining"
-                })
-            else:
-                logger.debug("Probability check failed")
-                await manager.send_message(client_id, {
-                    "type": "debug",
-                    "level": "probability",
-                    "message": "Probability check failed (unlucky roll)"
-                })
-
-    except Exception as e:
-        logger.error(f"Error processing audio chunk: {e}")
-        await manager.send_message(client_id, {
-            "type": "debug",
-            "level": "error",
-            "message": f"Error: {str(e)}"
-        })
+    # Build and send messages from result
+    messages = PipelineMessageBuilder.build_messages_from_result(result)
+    await manager.send_messages(client_id, messages)
 
 
-async def handle_control_message(client_id: str, data: dict):
+async def handle_control_message(client_id: str, data: dict) -> None:
     """
     Handle control messages from client.
 
@@ -211,15 +181,17 @@ async def handle_control_message(client_id: str, data: dict):
         await manager.send_message(client_id, {"type": "pong"})
 
     elif message_type == "get_status":
-        status = trigger_engine.get_status()
+        container = get_container()
+        status = container.trigger_engine.get_status()
         await manager.send_message(client_id, {
             "type": "status",
             "data": status
         })
 
-    elif message_type == "audio_ended":
+    elif message_type == MessageType.AUDIO_ENDED:
         # Start cooldown when audio finishes playing
-        trigger_engine.start_cooldown()
+        container = get_container()
+        container.trigger_engine.start_cooldown()
         logger.info(f"Audio ended for client {client_id}, cooldown started")
 
     else:

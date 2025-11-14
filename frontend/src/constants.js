@@ -1,5 +1,9 @@
 /**
+<<<<<<< HEAD
  * Constants and configuration for SOBUB AI Frontend
+=======
+ * Constants and configuration for Sobub AI Frontend
+>>>>>>> 8a38096837c66815ff3d73c6d5cda79c89c6b57a
  *
  * This module centralizes all constants, magic numbers, and configuration
  * values to improve maintainability and eliminate magic strings/numbers.

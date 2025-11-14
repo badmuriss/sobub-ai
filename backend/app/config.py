@@ -1,5 +1,9 @@
 """
+<<<<<<< HEAD
 Configuration module for SOBUB AI.
+=======
+Configuration module for Sobub AI.
+>>>>>>> 8a38096837c66815ff3d73c6d5cda79c89c6b57a
 
 This module centralizes all configuration values, default settings,
 and constants to eliminate magic numbers and improve maintainability.

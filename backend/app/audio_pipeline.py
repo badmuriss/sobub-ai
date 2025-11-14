@@ -1,5 +1,9 @@
 """
+<<<<<<< HEAD
 Audio Processing Pipeline for SOBUB AI.
+=======
+Audio Processing Pipeline for Sobub AI.
+>>>>>>> 8a38096837c66815ff3d73c6d5cda79c89c6b57a
 
 This module implements a clean, testable pipeline for processing audio chunks
 following the Single Responsibility Principle.

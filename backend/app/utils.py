@@ -1,5 +1,9 @@
 """
+<<<<<<< HEAD
 Utility functions for SOBUB AI.
+=======
+Utility functions for Sobub AI.
+>>>>>>> 8a38096837c66815ff3d73c6d5cda79c89c6b57a
 
 This module contains reusable utility functions to eliminate code duplication
 and follow the DRY (Don't Repeat Yourself) principle.

@@ -1,5 +1,9 @@
 /**
+<<<<<<< HEAD
  * Centralized Error Handler for SOBUB AI Frontend
+=======
+ * Centralized Error Handler for Sobub AI Frontend
+>>>>>>> 8a38096837c66815ff3d73c6d5cda79c89c6b57a
  *
  * This module provides consistent error handling, logging, and user-friendly
  * error messages across the entire application.
