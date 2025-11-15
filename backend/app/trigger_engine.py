@@ -46,14 +46,14 @@ class TriggerEngine:
         """
         Determine if a trigger should occur based on probability.
         Does not check cooldown - call is_cooldown_active() first.
-        
+
         Returns:
             True if random check passes
         """
         roll = random.uniform(0, 100)
-        should_fire = roll < self.trigger_probability
-        
-        logger.debug(f"Probability check: {roll:.2f} < {self.trigger_probability} = {should_fire}")
+        should_fire = roll <= self.trigger_probability
+
+        logger.debug(f"Probability check: {roll:.2f} <= {self.trigger_probability} = {should_fire}")
         return should_fire
     
     def select_random_meme(self, matching_memes: List[Dict]) -> Optional[Dict]:

@@ -1,9 +1,5 @@
 /**
-<<<<<<< HEAD
  * Centralized Error Handler for SOBUB AI Frontend
-=======
- * Centralized Error Handler for Sobub AI Frontend
->>>>>>> 8a38096837c66815ff3d73c6d5cda79c89c6b57a
  *
  * This module provides consistent error handling, logging, and user-friendly
  * error messages across the entire application.
@@ -155,15 +151,12 @@ class ErrorHandler {
    * @private
    */
   getUserMessage(error, category) {
-    // If error is a string, return it
     if (typeof error === 'string') {
       return error;
     }
 
-    // Check for specific error messages
     const errorMessage = error.message || error.toString();
 
-    // Network errors
     if (category === ErrorCategory.NETWORK || errorMessage.includes('fetch') || errorMessage.includes('network')) {
       if (errorMessage.includes('Failed to fetch')) {
         return MESSAGES.ERROR.CONNECTION_FAILED;
@@ -171,7 +164,6 @@ class ErrorHandler {
       return `Network error: ${errorMessage}`;
     }
 
-    // Permission errors
     if (category === ErrorCategory.PERMISSION || errorMessage.includes('permission') || errorMessage.includes('denied')) {
       if (errorMessage.toLowerCase().includes('microphone')) {
         return MESSAGES.ERROR.MICROPHONE_DENIED;
@@ -179,7 +171,6 @@ class ErrorHandler {
       return `Permission denied: ${errorMessage}`;
     }
 
-    // File errors
     if (category === ErrorCategory.FILE) {
       if (errorMessage.includes('size') || errorMessage.includes('large')) {
         return MESSAGES.ERROR.FILE_TOO_LARGE;
@@ -190,17 +181,14 @@ class ErrorHandler {
       return `File error: ${errorMessage}`;
     }
 
-    // Audio errors
     if (category === ErrorCategory.AUDIO) {
       return MESSAGES.ERROR.MICROPHONE_ERROR;
     }
 
-    // Validation errors
     if (category === ErrorCategory.VALIDATION) {
-      return errorMessage; // Usually already user-friendly
+      return errorMessage;
     }
 
-    // Default: return the error message
     return errorMessage || 'An unknown error occurred';
   }
 

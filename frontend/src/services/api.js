@@ -12,7 +12,6 @@ const getApiUrl = () => {
 const API_URL = getApiUrl();
 
 class ApiService {
-  // Meme endpoints
   async getMemes() {
     const response = await fetch(`${API_URL}/api/memes`);
     if (!response.ok) throw new Error('Failed to fetch memes');
@@ -65,7 +64,6 @@ class ApiService {
     return `${API_URL}/api/memes/${id}/audio`;
   }
 
-  // Settings endpoints
   async getSettings() {
     const response = await fetch(`${API_URL}/api/settings`);
     if (!response.ok) throw new Error('Failed to fetch settings');
@@ -85,14 +83,12 @@ class ApiService {
     return response.json();
   }
 
-  // Status endpoint
   async getStatus() {
     const response = await fetch(`${API_URL}/api/status`);
     if (!response.ok) throw new Error('Failed to fetch status');
     return response.json();
   }
 
-  // Tags endpoint
   async getAllTags() {
     const response = await fetch(`${API_URL}/api/tags`);
     if (!response.ok) throw new Error('Failed to fetch tags');

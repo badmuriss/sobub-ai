@@ -21,7 +21,8 @@ class WebSocketService {
     this.audioStream = null;
     this.chunkLengthSeconds = 3;
     this.isRecording = false;
-    this.isAudioPlaying = false; // Flag to pause sending while meme audio plays
+    this.isAudioPlaying = false;
+    this.corruptedChunksCount = 0;
     this.callbacks = {
       onTranscription: null,
       onMatch: null,
@@ -119,11 +120,9 @@ class WebSocketService {
   async startRecording(chunkLengthSeconds = 3) {
     if (this.isRecording) return;
 
-    // Reset audio playing flag when starting a new session
     this.isAudioPlaying = false;
 
     try {
-      // Check if getUserMedia is available (requires HTTPS or localhost)
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         const error = new Error(
           'Acesso ao microfone não disponível. ' +
@@ -134,7 +133,6 @@ class WebSocketService {
         throw error;
       }
 
-      // Request microphone access with optimized settings
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           sampleRate: 16000,
@@ -142,7 +140,6 @@ class WebSocketService {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          // Prevent audio playback from being captured
           suppressLocalAudioPlayback: true
         }
       });
@@ -151,14 +148,12 @@ class WebSocketService {
       this.chunkLengthSeconds = chunkLengthSeconds;
       this.isRecording = true;
 
-      // Start the recording cycle
       this.startRecordingCycle();
 
       console.log(`Recording started (chunk length: ${chunkLengthSeconds}s)`);
     } catch (error) {
       console.error('Failed to start recording:', error);
 
-      // Provide user-friendly error messages
       let errorMessage = error.message;
 
       if (error.name === 'NotAllowedError') {
@@ -166,12 +161,11 @@ class WebSocketService {
       } else if (error.name === 'NotFoundError') {
         errorMessage = 'Nenhum microfone encontrado. Verifique se seu dispositivo tem um microfone conectado.';
       } else if (error.name === 'NotSupportedError') {
-        errorMessage = error.message; // Use the detailed message from above
+        errorMessage = error.message;
       } else if (error.name === 'NotReadableError') {
         errorMessage = 'Microfone já está em uso por outro aplicativo. Feche outros apps que usam o microfone.';
       }
 
-      // Create enhanced error object
       const enhancedError = new Error(errorMessage);
       enhancedError.name = error.name;
       enhancedError.originalError = error;
@@ -186,7 +180,10 @@ class WebSocketService {
   startRecordingCycle() {
     if (!this.isRecording || !this.audioStream) return;
 
-    // Create a new MediaRecorder for each chunk to ensure complete WebM files
+    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+      return;
+    }
+
     this.mediaRecorder = new MediaRecorder(this.audioStream, {
       mimeType: 'audio/webm;codecs=opus'
     });
@@ -201,13 +198,22 @@ class WebSocketService {
 
     this.mediaRecorder.onstop = async () => {
       if (chunks.length > 0 && this.ws && this.ws.readyState === WebSocket.OPEN) {
-        // Combine chunks into a single blob
         const blob = new Blob(chunks, { type: 'audio/webm' });
+        const MIN_CHUNK_SIZE = 500;
 
-        // Only send if audio is not currently playing
-        if (!this.isAudioPlaying) {
+        if (blob.size < MIN_CHUNK_SIZE) {
+          this.corruptedChunksCount++;
+
+          if (this.corruptedChunksCount >= 1) {
+            await this.restartRecording();
+            return;
+          }
+        } else {
+          this.corruptedChunksCount = 0;
+        }
+
+        if (!this.isAudioPlaying && blob.size >= MIN_CHUNK_SIZE) {
           try {
-            // Wait for buffer conversion and send
             const buffer = await blob.arrayBuffer();
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
               this.ws.send(buffer);
@@ -215,15 +221,11 @@ class WebSocketService {
           } catch (error) {
             console.error('Failed to send audio chunk:', error);
           }
-        } else {
-          console.log('Skipping chunk send - meme audio is playing');
         }
       }
 
-      // Start next recording cycle if still recording
-      // Only after the current chunk has been fully processed and sent
-      if (this.isRecording) {
-        setTimeout(() => this.startRecordingCycle(), 100); // Small delay to prevent overlap
+      if (this.isRecording && !this.isAudioPlaying) {
+        setTimeout(() => this.startRecordingCycle(), 100);
       }
     };
 
@@ -234,7 +236,6 @@ class WebSocketService {
       }
     };
 
-    // Record for the specified duration, then stop (creates complete WebM file)
     this.mediaRecorder.start();
     setTimeout(() => {
       if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
@@ -245,13 +246,13 @@ class WebSocketService {
 
   stopRecording() {
     this.isRecording = false;
-    this.isAudioPlaying = false; // Reset flag when stopping
+    this.isAudioPlaying = false;
+    this.corruptedChunksCount = 0;
 
     if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
       this.mediaRecorder.stop();
     }
 
-    // Stop all tracks
     if (this.audioStream) {
       this.audioStream.getTracks().forEach(track => track.stop());
       this.audioStream = null;
@@ -262,10 +263,43 @@ class WebSocketService {
     console.log('Recording stopped');
   }
 
+  async restartRecording() {
+    const savedChunkLength = this.chunkLengthSeconds;
+
+    this.stopRecording();
+
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    try {
+      await this.startRecording(savedChunkLength);
+    } catch (error) {
+      console.error('Failed to restart recording:', error);
+
+      if (this.callbacks.onError) {
+        this.callbacks.onError(error);
+      }
+    }
+  }
+
   setAudioPlaying(isPlaying) {
-    console.log(`[DEBUG] setAudioPlaying called: ${this.isAudioPlaying} → ${isPlaying}`);
+    const wasPlaying = this.isAudioPlaying;
     this.isAudioPlaying = isPlaying;
-    console.log(`Audio playback state: ${isPlaying ? 'playing' : 'stopped'} - mic sending ${isPlaying ? 'paused' : 'active'}`);
+
+    if (!wasPlaying && isPlaying) {
+      if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+        this.mediaRecorder.stop();
+      }
+    }
+
+    if (wasPlaying && !isPlaying) {
+      if (this.isRecording) {
+        setTimeout(() => {
+          if (this.isRecording) {
+            this.startRecordingCycle();
+          }
+        }, 100);
+      }
+    }
   }
 
   on(event, callback) {

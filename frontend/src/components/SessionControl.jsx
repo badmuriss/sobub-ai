@@ -9,7 +9,6 @@ export default function SessionControl({ onTrigger, onSessionStop }) {
   const [status, setStatus] = useState(null);
   const [events, setEvents] = useState([]);
   const [showEventLog, setShowEventLog] = useState(() => {
-    // Load preference from localStorage, default to true
     const saved = localStorage.getItem('showEventLog');
     return saved !== null ? JSON.parse(saved) : true;
   });
@@ -78,7 +77,6 @@ export default function SessionControl({ onTrigger, onSessionStop }) {
   }, [events]);
 
   useEffect(() => {
-    // Set up WebSocket callbacks
     websocketService.on('transcription', (text) => {
       addEvent('transcription', { text });
     });
@@ -132,24 +130,17 @@ export default function SessionControl({ onTrigger, onSessionStop }) {
       }
     });
 
-    // Load initial status
     loadStatus();
 
     // Cleanup function runs when component unmounts
     return () => {
-      // Stop recording and disconnect WebSocket
       websocketService.stopRecording();
       websocketService.disconnect();
       releaseWakeLock();
 
-      // NOTE: We don't call onSessionStop here because:
-      // 1. It would stop playing audio when component re-renders
-      // 2. Audio should keep playing even if this component unmounts
-      // 3. onSessionStop should only be called on explicit user action or error
-
       console.log('SessionControl unmounted - session stopped');
     };
-  }, []); // Empty deps - use refs for callbacks
+  }, []);
 
   const loadStatus = async () => {
     try {
@@ -165,14 +156,11 @@ export default function SessionControl({ onTrigger, onSessionStop }) {
     setError(null);
 
     try {
-      // Load settings to get chunk length
       const settings = await apiService.getSettings();
       const chunkLength = settings.chunk_length_seconds || 3;
 
-      // Connect WebSocket
       await websocketService.connect();
 
-      // Start recording with configured chunk length
       await websocketService.startRecording(chunkLength);
 
       // Request screen wake lock to keep phone active
@@ -181,12 +169,10 @@ export default function SessionControl({ onTrigger, onSessionStop }) {
       setIsActive(true);
       setIsConnecting(false);
     } catch (err) {
-      // Use the specific error message from the service
       setError(err.message || 'Failed to start session. Please check microphone permissions.');
       setIsConnecting(false);
       console.error(err);
 
-      // Add error event to feed
       addEvent('error', { message: err.message });
     }
   };
@@ -318,19 +304,6 @@ export default function SessionControl({ onTrigger, onSessionStop }) {
 
   return (
     <div className="flex flex-col items-center justify-start min-h-screen px-4 pt-20">
-      {/* Status Info */}
-      {status && !isActive && (
-        <div className="mb-8 text-center text-dark-muted text-sm">
-          <p>Cooldown: {status.cooldown_seconds}s</p>
-          <p>Trigger Probability: {status.trigger_probability}%</p>
-          {status.cooldown_active && (
-            <p className="text-yellow-500 mt-2">
-              Cooldown active: {formatTime(status.cooldown_remaining)} remaining
-            </p>
-          )}
-        </div>
-      )}
-
       {/* Main Button */}
       <button
         onClick={isActive ? handleStop : handleStart}

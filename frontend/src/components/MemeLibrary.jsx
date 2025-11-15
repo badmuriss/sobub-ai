@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import apiService from '../services/api';
 
-// TagInput Component with badge system (space-separated)
 function TagInput({ tags, onChange, placeholder }) {
   const [currentInput, setCurrentInput] = useState('');
 
@@ -13,10 +12,7 @@ function TagInput({ tags, onChange, placeholder }) {
         onChange([...tags, newTag]);
       }
       setCurrentInput('');
-    } else if (e.key === 'Backspace' && !currentInput && tags.length > 0) {
-      // Delete last tag on backspace if input is empty
-      onChange(tags.slice(0, -1));
-    }
+    } 
   };
 
   const handleChange = (e) => {
@@ -127,7 +123,6 @@ export default function MemeLibrary() {
     setStagingMode(true);
     setMessage(null);
 
-    // Reset file input
     e.target.value = '';
   };
 
@@ -163,7 +158,6 @@ export default function MemeLibrary() {
   };
 
   const confirmBulkUpload = async () => {
-    // Validate all files have at least one tag
     const filesWithoutTags = pendingFiles.filter(f => f.tags.length === 0);
     if (filesWithoutTags.length > 0) {
       setMessage({
@@ -182,7 +176,6 @@ export default function MemeLibrary() {
       setUploadProgress({ current: i + 1, total: pendingFiles.length });
 
       try {
-        // Rename file to user's chosen filename
         const newFileName = `${pending.filename}.mp3`;
         const renamedFile = new File([pending.file], newFileName, { type: pending.file.type });
 
@@ -193,7 +186,6 @@ export default function MemeLibrary() {
       }
     }
 
-    // Cleanup
     pendingFiles.forEach(file => {
       if (file.audioUrl) {
         URL.revokeObjectURL(file.audioUrl);

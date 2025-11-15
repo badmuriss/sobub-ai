@@ -46,6 +46,7 @@ function Navigation() {
 function AppContent() {
   const [triggerData, setTriggerData] = useState(null);
   const [showNotification, setShowNotification] = useState(false);
+  const [showAudioUnlock, setShowAudioUnlock] = useState(false);
   const audioPlayerRef = useRef(null);
 
   const handleTrigger = (data) => {
@@ -84,10 +85,51 @@ function AppContent() {
     // Optional: Do something when audio finishes playing
   };
 
+  const handleAutoplayBlocked = () => {
+    setShowAudioUnlock(true);
+  };
+
+  const handleUnlockAudio = async () => {
+    if (audioPlayerRef.current) {
+      const success = await audioPlayerRef.current.retryPlay();
+      if (success) {
+        setShowAudioUnlock(false);
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-dark-bg text-dark-text">
       <Navigation />
-      
+
+      {/* Audio Unlock Modal */}
+      {showAudioUnlock && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-surface border-2 border-green-500 rounded-lg p-8 max-w-md w-full shadow-2xl">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🔇</div>
+              <h2 className="text-2xl font-bold text-white mb-3">
+                Áudio Bloqueado
+              </h2>
+              <p className="text-dark-muted mb-6 leading-relaxed">
+                Seu navegador bloqueou a reprodução automática de áudio por segurança.
+                <br /><br />
+                Toque no botão abaixo para permitir que o SOBUB AI toque memes de áudio.
+              </p>
+              <button
+                onClick={handleUnlockAudio}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-lg transition-all transform hover:scale-105 active:scale-95"
+              >
+                🔊 Permitir Áudio
+              </button>
+              <p className="text-xs text-dark-muted mt-4">
+                Isso é necessário apenas uma vez por sessão
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Notification */}
       {showNotification && triggerData && (
         <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
@@ -122,6 +164,7 @@ function AppContent() {
         onPlayStart={handlePlayStart}
         onPlayEnd={handlePlayEnd}
         onPlayComplete={handlePlayComplete}
+        onAutoplayBlocked={handleAutoplayBlocked}
       />
     </div>
   );

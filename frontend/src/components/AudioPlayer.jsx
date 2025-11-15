@@ -1,21 +1,32 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import apiService from '../services/api';
 
-const AudioPlayer = forwardRef(({ triggerData, onPlayComplete, onPlayStart, onPlayEnd }, ref) => {
+const AudioPlayer = forwardRef(({ triggerData, onPlayComplete, onPlayStart, onPlayEnd, onAutoplayBlocked }, ref) => {
   const audioRef = useRef(null);
 
-  // Expose stopAudio method to parent components
+  // Expose methods to parent components
   useImperativeHandle(ref, () => ({
     stopAudio() {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
         audioRef.current.src = '';
-        // Notify that playback stopped
         if (onPlayEnd) {
           onPlayEnd();
         }
       }
+    },
+
+    async retryPlay() {
+      if (audioRef.current && audioRef.current.src) {
+        try {
+          await audioRef.current.play();
+          return true;
+        } catch (error) {
+          return false;
+        }
+      }
+      return false;
     }
   }));
 
@@ -31,11 +42,25 @@ const AudioPlayer = forwardRef(({ triggerData, onPlayComplete, onPlayStart, onPl
 
       if (audioRef.current) {
         audioRef.current.src = audioUrl;
-        await audioRef.current.play();
+
+        const playPromise = audioRef.current.play();
+
+        if (playPromise !== undefined) {
+          try {
+            await playPromise;
+          } catch (playError) {
+            if (onAutoplayBlocked) {
+              onAutoplayBlocked();
+            } else {
+              if (onPlayEnd) {
+                onPlayEnd();
+              }
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to play audio:', error);
-      // Reset audio playing state if playback fails
       if (onPlayEnd) {
         onPlayEnd();
       }
@@ -50,7 +75,6 @@ const AudioPlayer = forwardRef(({ triggerData, onPlayComplete, onPlayStart, onPl
   };
 
   const handleEnded = () => {
-    // Notify that audio playback ended
     if (onPlayEnd) {
       onPlayEnd();
     }
@@ -60,14 +84,9 @@ const AudioPlayer = forwardRef(({ triggerData, onPlayComplete, onPlayStart, onPl
     }
   };
 
-  const handlePause = () => {
-    // Don't do anything on pause - onEnded handles when audio finishes
-    // This prevents duplicate onPlayEnd() calls
-  };
 
   const handleError = (e) => {
     console.error('Audio element error:', e);
-    // Reset audio playing state on error
     if (onPlayEnd) {
       onPlayEnd();
     }
@@ -78,7 +97,6 @@ const AudioPlayer = forwardRef(({ triggerData, onPlayComplete, onPlayStart, onPl
       ref={audioRef}
       onPlay={handlePlay}
       onEnded={handleEnded}
-      onPause={handlePause}
       onError={handleError}
       className="hidden"
     />
